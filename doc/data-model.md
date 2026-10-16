@@ -1,12 +1,12 @@
 # open-credits data model
 
-Draft 2, 2026-10-16 (draft 1 of 2026-10-15 plus the decisions at the end). Status: proposal, to be validated before the pilot writes its SQLite schema (backlog ticket OPEN-CREDITS-002).
+Draft 3, 2026-10-16 (draft 1 of 2026-10-15; draft 2 took the six decisions at the end; draft 3 adds editions and multi-part files to layer 0, the review views, and composed roles to layer 5). Status: proposal, to be validated before the pilot writes its SQLite schema (backlog ticket OPEN-CREDITS-002).
 
 The model follows the process, one layer per stage:
 
 | Layer | Stage | What it holds | Who produces it |
 |---|---|---|---|
-| 0 | the video file | the **work** (a film or an episode) and the **copy** (one file of it) | the client, from the contributor's Plex library |
+| 0 | the video file | the **work** (a film or an episode), its **editions** (cuts), the **copies** of an edition and the **parts** (files) of a copy | the client, from the contributor's Plex library |
 | 1 | the screenshots | **segments** (where the credits are) and **frames** (the images read) | the client, with ffmpeg |
 | 2 | the OCR output | **text boxes** per frame, then **text lines** rebuilt across frames on a virtual page | the client, with a CPU OCR engine |
 | 3 | the structured credits | **blocks** (the headed sections) and **credits** (one assertion each: who or what, in which role), linked to **entities** (persons, companies, places, songs) | the client parses, the community and the moderators confirm |
@@ -38,23 +38,50 @@ Examples below are illustrative. The pilot will replace them with lines read fro
 | `imdb_id`, `wikidata_id` | optional |
 | `title`, `year` | display only |
 
-**COPY**: one distinct file of a work, whoever holds it. Two contributors with the same file share one copy row; this is what makes cross-validation between copies possible.
+Below the work, three levels, which Plex already has (a movie, its media, their parts):
+
+- an **edition** is a cut of the work: theatrical, director's cut, extended, TV cut. Two editions can have different credits;
+- a **copy** is one concrete encode of an edition (a Blu-ray remux, a DVD rip, a web file), what Plex calls a *media*;
+- a **part** is one file of a copy (Plex *part*): most copies have one, some films come as `cd1` / `cd2`.
+
+**EDITION**
 
 | Field | Notes |
 |---|---|
-| `id` | UUID |
-| `work_id` | |
-| `opensubtitles_hash`, `file_size` | the identity of the file. Plex already computes the hash (`T_WC_TMDB_PLEX_MEDIA_PART.OPENSUBTITLE_HASH`), so the client gets it for free. The path is **never** sent: it is private |
-| `duration_ms`, `width`, `height`, `fps` | from ffprobe or Plex |
-| `edition` | theatrical, director's cut, extended… (Plex `FILE_EDITION`) |
+| `id`, `work_id` | |
+| `label` | `theatrical`, `directors_cut`, `extended`, `tv_cut`, `unrated`, `other` (+ free text) |
+| `nominal_runtime_ms` | |
+| `status` | `proposed`, `confirmed`: copies are grouped into editions by evidence, see below |
+
+**COPY**: one encode, whoever holds it. Two contributors with the same files share one copy row; this is what makes cross-validation between copies possible.
+
+| Field | Notes |
+|---|---|
+| `id`, `work_id`, `edition_id` | `edition_id` empty until the copy is grouped |
+| `fingerprint` | hash of the ordered list of its parts' identities: the identity of the copy |
+| `part_count`, `duration_ms` (sum of the parts), `width`, `height`, `fps` | from ffprobe or Plex |
+| `edition_hint` | what the contributor's library says: the Plex `{edition-...}` tag, `FILE_EDITION` (Criterion, Remastered...) |
 | `version_language` | the language of the version the credits come from: a French dubbed copy carries French dubbing credits |
-| `source` | Blu-ray, DVD, web, TV recording |
+| `source` | Blu-ray, remux, DVD, web, TV recording (Plex `FILE_SOURCE`) |
+
+**PART**: one file.
+
+| Field | Notes |
+|---|---|
+| `id`, `copy_id`, `part_index` | Plex `PART_INDEX` |
+| `opensubtitles_hash`, `file_size` | the identity of the file, computed from its content (its size plus its first and last 64 KB), so the **file name plays no part**: the same file renamed by two contributors has the same hash. Plex already computes it (`T_WC_TMDB_PLEX_MEDIA_PART.OPENSUBTITLE_HASH`, `PART_SIZE`), so the client gets it for free. The path is **never** sent: it is private |
+| `duration_ms`, `offset_ms` | `offset_ms` = where the part starts in the copy (sum of the previous parts) |
+
+**Same file, same cut: two different questions.**
+
+- *Same file?* The hash answers it, with certainty: same `opensubtitles_hash` and size, same file, whatever its name. A full SHA-256 would be stronger but means reading the whole file (minutes for a 50 GB remux); it can be added later as an optional field.
+- *Same cut?* The hash cannot answer it: a 4K remux and a DVD rip of the theatrical cut have different hashes but the same credits. Copies are grouped into an edition from three clues: the `edition_hint`, the duration (allowing for the PAL speed-up, which makes a 25 fps copy about 4 % shorter than the 24 fps one), and the credits themselves (two copies whose closing credits match line for line are the same cut, at least for the credits). The client proposes the grouping; the community confirms it, as with homonyms.
 
 **SUBMISSION**: one run of the client on one copy.
 
 | Field | Notes |
 |---|---|
-| `id`, `contributor_id`, `copy_id` | |
+| `id`, `contributor_id`, `copy_id` | a submission covers every part of the copy |
 | `client_version`, `ocr_engine`, `ocr_engine_version`, `parameters` (JSON) | reproducibility: the same copy reprocessed by a better engine is a new submission |
 | `submitted_at`, `status` | `received`, `parsed`, `published`, `rolled_back` (a sanctioned contributor's submissions are rolled back in one operation) |
 | `licence` | always `CC0-1.0`, recorded explicitly |
@@ -69,9 +96,9 @@ Examples below are illustrative. The pilot will replace them with lines read fro
 
 | Field | Notes |
 |---|---|
-| `id`, `submission_id` | |
+| `id`, `submission_id`, `part_id` | the part the segment lies in (opening credits in the first part, closing credits in the last) |
 | `kind` | `opening_titles`, `opening_credits_over_action`, `closing_credits`, `post_credits_scene`, `recap` (series), `card` (an isolated title card, e.g. a dedication) |
-| `start_ms`, `end_ms` | |
+| `start_ms`, `end_ms` | within the part; the part's `offset_ms` gives the time in the copy |
 | `detected_by` | `plex_marker`, `blackdetect`, `scene_change`, `manual` |
 | `layout` | `rolling` (vertical scroll), `cards` (successive static cards), `graphic` (Saul Bass, text inside images), `crawl`, `mixed` |
 | `scroll_px_per_s` | for rolling credits, measured: it is what lets layer 2 put every frame on one virtual page |
@@ -149,7 +176,8 @@ A **credit** is one assertion: an entity, a role, on this work. It always keeps 
 | `name_raw` | the name exactly as credited | **P1932** object named as |
 | `entity_id` | link to an entity (3c), empty until resolved | the statement's value |
 | `role_raw` | the job exactly as credited ("Key 2nd Assistant Director") | **P13187** role named in credits as |
-| `role_id` | link to the vocabulary (layer 5) | dedicated property, or P3092 + **P3831** |
+| `role_id` | link to the vocabulary (layer 5): the base job | dedicated property, or P3092 + **P3831** |
+| `role_modifiers`, `role_target_entity_id` | rank, unit and scope of a composed role ("Key", "Second Unit", "Assistant to …"), see layer 5 | P13187 keeps the full wording |
 | `character_raw`, `character_id` | for cast and dubbing | P4633 / P453 |
 | `language` | for dubbing credits | P407 |
 | `qualifier_raw` | "(as …)", "with the participation of", "and" | |
@@ -208,7 +236,15 @@ So open-credits keeps its **own vocabulary**, seeded from TMDb's job list and ma
 | `wikidata_job_item` | the P3831 value when the property is P3092 |
 | `status` | `active`, `proposed` (a job seen on screen that no source has: the community can add roles, as TMDb asks on its forum) |
 
-**ROLE_ALIAS**: the wordings the parser matches on screen, in every language: "Director of Photography", "Cinematographer", "Directeur de la photographie", "Chef opérateur", "Image". This table is what turns `role_raw` into `role_id`.
+**Composed roles.** On-screen roles are often a base job plus modifiers: "Key Second Assistant Director", "Second Unit First Assistant Director", "Additional Visual Effects Supervisor", "Assistant to Mr. Nolan", "Stunt Double for Tom Cruise". TMDb flattens these into separate jobs (its 934 jobs include "First Assistant Director Trainee" and "Second Unit Director of Photography"). Stored flat, the vocabulary would grow without end, mostly with roles seen once. open-credits composes them instead:
+
+- **ROLE** holds the base jobs: a few thousand at most, seeded with TMDb's 934 and growing as new jobs are found;
+- **ROLE_MODIFIER** holds the modifiers, about a hundred: rank (`key`, `chief`, `head`, `first`, `second`, `assistant`, `additional`, `supervising`, `senior`, `trainee`, `co`), unit (taken from the block: second unit, Morocco unit), scope (`to` or `for` a person);
+- the CREDIT carries `role_id`, `role_modifiers` (a list) and `role_target_entity_id` (the person an assistant works for, or a stunt performer doubles).
+
+The wording on screen is always kept in `role_raw` (P13187 on Wikidata), so composing loses nothing. A wording no rule can parse keeps the nearest parent role and the status `needs_role`, for the community to settle.
+
+**ROLE_ALIAS**: the wordings the parser matches on screen, in every language: "Director of Photography", "Cinematographer", "Directeur de la photographie", "Chef opérateur", "Image". This table is what turns `role_raw` into `role_id` and modifiers. It is the large one: every language, every spelling of every job, so tens of thousands of rows in time, which is fine for a lookup table.
 
 Examples of the three kinds of roles:
 
@@ -232,6 +268,20 @@ Examples of the three kinds of roles:
 
 ---
 
+## Review views: every layer can be checked on screen
+
+Every result of the process has a view where a person can check it against the image, then validate or correct it (Philippe, 2026-10-16: "every task result needs a GUI so check and validation is possible"). In the pilot, the client writes these views as **static HTML pages** generated from the local SQLite file and opened in a browser, with no server; the master site later serves the same views.
+
+| Layer | View | What it lets one check |
+|---|---|---|
+| 0 | the copy and its parts, the proposed edition | the grouping of copies into editions |
+| 1 | the timeline of the copy with the detected segments, and a strip of the kept frames | that the credits were found, where they start and end |
+| 2 | the **virtual page**: the frames of a rolling segment stitched into one tall image, with the text lines drawn over it and their voted text beside | the OCR, line by line, against the image |
+| 3 | the credits as a table grouped by block, laid out as on screen (role on the left, name on the right); each line opens the crop of the frame it was read from | the parsing: block, role, name, character |
+| 4 | the consolidated credits of the work compared with TMDb and Wikidata: already there, new, conflicting | what to contribute, and where |
+
+Corrections made in a view are written as edits (with HISTORY), never by changing the raw OCR: the raw layers stay the evidence.
+
 ## From the model to contributions
 
 **To Wikidata**, a confirmed credit becomes a statement that follows the practice already used on about 1,960 P3092 statements:
@@ -251,10 +301,13 @@ Examples of the three kinds of roles:
 
 ```mermaid
 erDiagram
-    WORK ||--o{ COPY : "has"
+    WORK ||--o{ EDITION : "cut as"
+    EDITION ||--o{ COPY : "encoded as"
+    COPY ||--|{ PART : "files"
     COPY ||--o{ SUBMISSION : "processed in"
     CONTRIBUTOR ||--o{ SUBMISSION : "sends"
     SUBMISSION ||--o{ SEGMENT : "finds"
+    PART ||--o{ SEGMENT : "holds"
     SEGMENT ||--o{ FRAME : "sampled into"
     FRAME ||--o{ TEXT_BOX : "OCR"
     SEGMENT ||--o{ TEXT_LINE : "rebuilt on virtual page"
@@ -263,6 +316,7 @@ erDiagram
     CREDIT }o--|| ROLE : "role_id"
     CREDIT }o--o| ENTITY : "entity_id (person, company, place, song)"
     ROLE ||--o{ ROLE_ALIAS : "matched by"
+    CREDIT }o--o{ ROLE_MODIFIER : "role_modifiers"
     WORK ||--o{ CONSOLIDATED_CREDIT : "credits"
     CONSOLIDATED_CREDIT }o--|{ CREDIT : "computed from"
     CONSOLIDATED_CREDIT ||--o{ HISTORY : "edits"

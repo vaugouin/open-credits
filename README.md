@@ -6,7 +6,7 @@ Every film and every episode ends (and often begins) with a list of the people, 
 
 ## Status
 
-Pilot stage (October 2026). Nothing to install yet. The current work is the data model, [`doc/data-model.md`](doc/data-model.md), and a pilot on seven deliberately different titles (a CGI blockbuster, a crowdfunded film, Saul Bass titles, graphic credits with dubbing credits, a French film, a TV episode, a DVD rip).
+Pilot stage (October 2026). Nothing to install yet. The current work is the data model, [`doc/data-model.md`](doc/data-model.md), the comparison of technologies, [`doc/technology-choices.md`](doc/technology-choices.md), and a pilot on seven deliberately different titles (a CGI blockbuster, a crowdfunded film, Saul Bass titles, graphic credits with dubbing credits, a French film, a TV episode, a DVD rip).
 
 ## Principles
 

@@ -1,0 +1,282 @@
+# open-credits data model
+
+Draft 2, 2026-10-16 (draft 1 of 2026-10-15 plus the decisions at the end). Status: proposal, to be validated before the pilot writes its SQLite schema (backlog ticket OPEN-CREDITS-002).
+
+The model follows the process, one layer per stage:
+
+| Layer | Stage | What it holds | Who produces it |
+|---|---|---|---|
+| 0 | the video file | the **work** (a film or an episode) and the **copy** (one file of it) | the client, from the contributor's Plex library |
+| 1 | the screenshots | **segments** (where the credits are) and **frames** (the images read) | the client, with ffmpeg |
+| 2 | the OCR output | **text boxes** per frame, then **text lines** rebuilt across frames on a virtual page | the client, with a CPU OCR engine |
+| 3 | the structured credits | **blocks** (the headed sections) and **credits** (one assertion each: who or what, in which role), linked to **entities** (persons, companies, places, songs) | the client parses, the community and the moderators confirm |
+| 4 | the consolidated credits | one line per credit of a work, computed from all submissions, editable and lockable | the master database |
+
+The vocabulary of roles (jobs, company roles, place roles) sits beside the layers and is the bridge to TMDb and Wikidata.
+
+Examples below are illustrative. The pilot will replace them with lines read from real films.
+
+---
+
+## Identifiers
+
+- Every row of the master database has a **UUID** (version 7, time-ordered) as its primary key: copies and dumps can be compared and forked without key collisions (charter, decision 24).
+- External identifiers are **attributes, never keys**: TMDb ids (`int`), IMDb ids (`tt…`, `nm…`, `co…`), Wikidata Q-ids. A credit stays valid when an external id changes or disappears.
+- Physical table names are an open question (see the end): the names below are logical.
+
+---
+
+## Layer 0: work and copy
+
+**WORK**: what the credits belong to.
+
+| Field | Notes |
+|---|---|
+| `id` | UUID |
+| `kind` | `movie`, `episode`. A series or a season is never credited as such: credits are read per episode; series-level views are computed |
+| `tmdb_movie_id` or `tmdb_serie_id` + `season_number` + `episode_number` | the T2S join keys (`T_WC_TMDB_PLEX_MOVIE` gives them through the Plex catalogue) |
+| `imdb_id`, `wikidata_id` | optional |
+| `title`, `year` | display only |
+
+**COPY**: one distinct file of a work, whoever holds it. Two contributors with the same file share one copy row; this is what makes cross-validation between copies possible.
+
+| Field | Notes |
+|---|---|
+| `id` | UUID |
+| `work_id` | |
+| `opensubtitles_hash`, `file_size` | the identity of the file. Plex already computes the hash (`T_WC_TMDB_PLEX_MEDIA_PART.OPENSUBTITLE_HASH`), so the client gets it for free. The path is **never** sent: it is private |
+| `duration_ms`, `width`, `height`, `fps` | from ffprobe or Plex |
+| `edition` | theatrical, director's cut, extended… (Plex `FILE_EDITION`) |
+| `version_language` | the language of the version the credits come from: a French dubbed copy carries French dubbing credits |
+| `source` | Blu-ray, DVD, web, TV recording |
+
+**SUBMISSION**: one run of the client on one copy.
+
+| Field | Notes |
+|---|---|
+| `id`, `contributor_id`, `copy_id` | |
+| `client_version`, `ocr_engine`, `ocr_engine_version`, `parameters` (JSON) | reproducibility: the same copy reprocessed by a better engine is a new submission |
+| `submitted_at`, `status` | `received`, `parsed`, `published`, `rolled_back` (a sanctioned contributor's submissions are rolled back in one operation) |
+| `licence` | always `CC0-1.0`, recorded explicitly |
+
+**CONTRIBUTOR**: an ordinary account (one per person), `reputation`, `role` (`contributor`, `moderator`), optional TMDb and Wikidata usernames.
+
+---
+
+## Layer 1: segments and frames
+
+**SEGMENT**: a stretch of the copy that carries credits.
+
+| Field | Notes |
+|---|---|
+| `id`, `submission_id` | |
+| `kind` | `opening_titles`, `opening_credits_over_action`, `closing_credits`, `post_credits_scene`, `recap` (series), `card` (an isolated title card, e.g. a dedication) |
+| `start_ms`, `end_ms` | |
+| `detected_by` | `plex_marker`, `blackdetect`, `scene_change`, `manual` |
+| `layout` | `rolling` (vertical scroll), `cards` (successive static cards), `graphic` (Saul Bass, text inside images), `crawl`, `mixed` |
+| `scroll_px_per_s` | for rolling credits, measured: it is what lets layer 2 put every frame on one virtual page |
+
+**FRAME**: one image read by the OCR.
+
+| Field | Notes |
+|---|---|
+| `id`, `segment_id`, `timecode_ms` | |
+| `phash` | perceptual hash, to drop duplicates and to match frames between copies |
+| `page_offset_px` | for rolling credits: where this frame sits on the virtual page (`scroll_px_per_s × (timecode − segment start)`) |
+| `has_text` | from the text detector; frames without text are not kept |
+| `evidence_path` | optional (charter, decision 3): a cropped WebP of the frame, stored only if the contributor sends it |
+
+---
+
+## Layer 2: OCR output
+
+### 2a. Text boxes (raw, per frame)
+
+The engine's output is normalised to one row per **line box** (not per word: credits are read line by line, and every engine can merge words into lines).
+
+| Field | Notes |
+|---|---|
+| `frame_id` | |
+| `x`, `y`, `w`, `h` | in pixels of the frame; `y_page = y + page_offset_px` |
+| `text` | as read |
+| `confidence` | 0 to 1, engine-specific |
+| `font_height_px`, `is_upper_case`, `is_bold` (if the engine gives it) | the parser needs typography: headings are larger or in capitals |
+
+The engine's native output (Tesseract TSV, PaddleOCR JSON) can be kept beside the submission as an optional archive file, for reprocessing without rereading the video. It is not part of the shared model.
+
+### 2b. Text lines (rebuilt across frames)
+
+On rolling credits the same line appears in many frames, moving up. Projected onto the **virtual page** (the whole roll as one tall image), its readings fall on the same `y_page` and can be merged. On cards, each card is its own short page.
+
+| Field | Notes |
+|---|---|
+| `id`, `segment_id` | |
+| `y_page`, `x`, `w`, `h` | position on the virtual page; `x` gives the **column** (credits are often two columns, job on the left and name on the right, or a centred heading with names below) |
+| `text` | the reading chosen by vote among the frames, accents included |
+| `readings` | how many frames saw it, how many agree |
+| `confidence` | combined |
+| `frame_ids` | the frames that saw it: the evidence chain |
+| `first_ms`, `last_ms` | when it is on screen: becomes the **time index** of the Wikidata reference |
+
+This table is the pivot of the whole project: everything above it is image processing, everything below it is interpretation. Layer 3 can be recomputed from it with a better parser, without the video.
+
+---
+
+## Layer 3: structured credits
+
+### 3a. Blocks
+
+Credits are organised in **blocks**: a heading followed by entries ("Second Unit", "Visual Effects by Industrial Light & Magic", "Songs", "Special Thanks", "Version française"). A block gives its context to every entry under it.
+
+| Field | Notes |
+|---|---|
+| `id`, `segment_id`, `display_order` | |
+| `heading_raw` | as on screen; empty for the first cast list |
+| `block_type` | from the vocabulary: `cast`, `crew`, `unit`, `vendor_staff`, `songs`, `thanks`, `dedication`, `dubbing`, `locations`, `companies`, `legal`, `logos` |
+| `unit` | `main`, `second_unit`, `additional_photography`, `aerial`, or a place ("Morocco Unit") |
+| `vendor_entity_id` | when the block lists a company's staff ("Visual Effects by Framestore": everyone below works for Framestore) |
+| `version_language` | for dubbing blocks |
+| `line_ids` | the text lines it covers |
+
+### 3b. Credits
+
+A **credit** is one assertion: an entity, a role, on this work. It always keeps the on-screen wording beside its interpretation, because the wording is the evidence and the interpretation can be wrong.
+
+| Field | Notes | Wikidata equivalent |
+|---|---|---|
+| `id`, `block_id`, `display_order` | | P1545 series ordinal |
+| `entity_kind` | `person`, `company`, `place`, `song`, `work`, `other` | |
+| `name_raw` | the name exactly as credited | **P1932** object named as |
+| `entity_id` | link to an entity (3c), empty until resolved | the statement's value |
+| `role_raw` | the job exactly as credited ("Key 2nd Assistant Director") | **P13187** role named in credits as |
+| `role_id` | link to the vocabulary (layer 5) | dedicated property, or P3092 + **P3831** |
+| `character_raw`, `character_id` | for cast and dubbing | P4633 / P453 |
+| `language` | for dubbing credits | P407 |
+| `qualifier_raw` | "(as …)", "with the participation of", "and" | |
+| `line_ids` | the text lines it was parsed from | |
+| `parse_confidence` | | |
+| `is_private_individual` | backers, thanked persons: stored, kept out of the public view and contributions (charter, decision 10) | |
+
+### 3c. Entities
+
+| Entity | Fields | Links |
+|---|---|---|
+| **PERSON** | `id`, `display_name`, `is_private_individual` | `tmdb_person_id`, `wikidata_id`, `imdb_nm` |
+| **COMPANY** | `id`, `display_name`, `company_class` (layer 5), `country` | `tmdb_company_id`, `wikidata_id`, `imdb_co` |
+| **PLACE** | `id`, `display_name`, `place_type` (country, region, city, structure, studio facility, nature) | `wikidata_id` (P131 gives the hierarchy), T2S `T_WC_T2S_LOCATION` |
+| **SONG** | `id`, `title_raw` | `wikidata_id`; its own credits (performer, writer, label) are credits whose work is the song, nested under the film's `songs` block |
+
+Unresolved names stay on the credit (`name_raw`, empty `entity_id`) and feed the **disambiguation queue**: candidate entities with scores, decided by the community (charter, decision 17: "John Williams" is several people).
+
+---
+
+## Layer 4: consolidated credits (master database)
+
+**CONSOLIDATED_CREDIT**: one per distinct credit of a work, computed from the submissions' credits (grouped by work, role, entity or normalised name, character).
+
+| Field | Notes |
+|---|---|
+| `id`, `work_id`, `role_id`, `entity_id`, `name_display`, `character_display`, `display_order` | |
+| `support` | number of submissions (and of distinct copies) that carry it |
+| `score` | agreement weighted by reputation; a single submission is authoritative (decision 15) |
+| `status` | `proposed`, `confirmed`, `locked` (by a moderator), `rejected` |
+| `source_credit_ids` | the submission credits it comes from: evidence chain down to the frames |
+
+Every edit of a consolidated credit writes a **HISTORY** row (who, when, before, after, reason), as on TMDb. **REPORT** rows (reason, public or private, status) attach to a work or a credit.
+
+---
+
+## Layer 5: the vocabulary (jobs, company roles, place roles)
+
+Neither source is enough alone:
+
+- **TMDb** has 12 departments and about 950 jobs (`/configuration/jobs`; the jobs actually used are already in the T2S database, see decision 4 at the end), all for people. Companies have no roles (production companies only, no distributors, no vendors), and there are no filming locations. Thanks, In Memory Of and Songs exist only as crew jobs.
+- **Wikidata** is more precise and extensible: dedicated properties for the main jobs (P57 director, P344 director of photography, P1040 film editor, P5126 assistant director…), **P3092 film crew member + P3831 job item** for every other job (jobs are items, typed *filmmaking occupation* Q4220920 and chained by P279), company properties (P272, P750, P449, P859 sponsor), places (P915), thanks (P7137 acknowledges).
+
+So open-credits keeps its **own vocabulary**, seeded from TMDb's job list and mapped to both:
+
+**ROLE**
+
+| Field | Notes |
+|---|---|
+| `id`, `code` | stable code, e.g. `directing.first_assistant_director` |
+| `label_en` | |
+| `applies_to` | `person`, `company`, `place`, `song`, `work` |
+| `parent_role_id` | hierarchy: first assistant director → assistant director → director, as P279 does on Wikidata |
+| `tmdb_department`, `tmdb_job` | empty if TMDb has no such job |
+| `wikidata_property` | dedicated property, or P3092 |
+| `wikidata_job_item` | the P3831 value when the property is P3092 |
+| `status` | `active`, `proposed` (a job seen on screen that no source has: the community can add roles, as TMDb asks on its forum) |
+
+**ROLE_ALIAS**: the wordings the parser matches on screen, in every language: "Director of Photography", "Cinematographer", "Directeur de la photographie", "Chef opérateur", "Image". This table is what turns `role_raw` into `role_id`.
+
+Examples of the three kinds of roles:
+
+| Kind | Role | TMDb | Wikidata |
+|---|---|---|---|
+| person | Director | Directing / Director | P57 |
+| person | First Assistant Director | Directing / First Assistant Director | P3092 + P3831 Q141617183 (first assistant director) |
+| person | Second Unit Director | Directing / Second Unit Director | P3092 + P3831 Q27890911 |
+| person | Gaffer | Lighting / Gaffer | P3092 + P3831 Q1424726 |
+| person | Voice actor (dubbing) | **none**: TMDb's Bible excludes dubbed versions | P725 + P407 language + P453 character |
+| person | Thanks | Crew / Thanks | P7137 acknowledges |
+| company | Production company | production_companies | P272 |
+| company | Distributor | none | P750 |
+| company | Visual effects vendor | none (only its staff, as crew) | none found: kept in open-credits only |
+| company | Dubbing studio | none | none found as a role; the class exists (Q1298801 dubbing studio) |
+| company | Sponsor | none | P859 |
+| place | Filming location | none | P915 |
+| place | Studio facility ("filmed at …") | none | P915 (the facility is a place) |
+
+**COMPANY_CLASS**, for company entities, mapped to Wikidata classes: film production company Q1762059, television production company Q10689397, film distributor Q368290, film studio Q375336, animation studio Q1107679, dubbing studio Q1298801, film laboratory Q388570, television network Q1254874; plus classes Wikidata lacks (visual effects company, equipment rental, post-production house), kept as open-credits classes until Wikidata has an item.
+
+---
+
+## From the model to contributions
+
+**To Wikidata**, a confirmed credit becomes a statement that follows the practice already used on about 1,960 P3092 statements:
+
+- property: the role's dedicated property, or P3092 with qualifier P3831 = the job item;
+- value: the entity's Q-id;
+- qualifiers: P1932 (name as credited), P13187 (role as credited), P1545 (order), P453 / P4633 (character), P407 (dubbing language);
+- reference: P248 *stated in* = the film's own item, P518 *applies to part* = closing credits (Q1553078) or opening credits (Q635115), and P4895 *time index* = `first_ms`.
+
+**To TMDb**, only the roles with a TMDb department and job, and only from the original version (TMDb's rule), as a list per title "on screen, absent from TMDb" that the contributor enters on the website (the API cannot write credits).
+
+**To the T2S database**, the consolidated credits, the entities and the vocabulary, copied as read-only tables.
+
+---
+
+## Diagram
+
+```mermaid
+erDiagram
+    WORK ||--o{ COPY : "has"
+    COPY ||--o{ SUBMISSION : "processed in"
+    CONTRIBUTOR ||--o{ SUBMISSION : "sends"
+    SUBMISSION ||--o{ SEGMENT : "finds"
+    SEGMENT ||--o{ FRAME : "sampled into"
+    FRAME ||--o{ TEXT_BOX : "OCR"
+    SEGMENT ||--o{ TEXT_LINE : "rebuilt on virtual page"
+    SEGMENT ||--o{ BLOCK : "parsed into"
+    BLOCK ||--o{ CREDIT : "lists"
+    CREDIT }o--|| ROLE : "role_id"
+    CREDIT }o--o| ENTITY : "entity_id (person, company, place, song)"
+    ROLE ||--o{ ROLE_ALIAS : "matched by"
+    WORK ||--o{ CONSOLIDATED_CREDIT : "credits"
+    CONSOLIDATED_CREDIT }o--|{ CREDIT : "computed from"
+    CONSOLIDATED_CREDIT ||--o{ HISTORY : "edits"
+```
+
+---
+
+## Decisions on the open questions (2026-10-16)
+
+The six questions of draft 1, settled by Philippe:
+
+1. **Physical names.** The master uses its own lower-case names, as above. The copy into the T2S database writes them into `T_WC_OC_*` tables, following the ecosystem's conventions.
+2. **Dubbing credits** go to Wikidata (P725 voice actor, P407 language) and stay in open-credits. They never go to TMDb, whose Bible excludes dubbed versions.
+3. **Company roles without a Wikidata property** (visual effects vendor, dubbing studio, equipment rental) are kept in open-credits only. No property proposal to Wikidata for now.
+4. **The TMDb job list** is already in the T2S MariaDB database: the DDL has no reference table, but every job TMDb uses appears as a `CREW_DEPARTMENT` / `CREW_JOB` pair in the credit tables (`T_WC_TMDB_PERSON_MOVIE`, `_SERIE`, `_SEASON`, `_EPISODE`). ROLE is seeded from the distinct pairs, with their number of credits as a weight; no API call needed. Query: `tmdb-crawler/doc/sql/check-tmdb-crew-jobs.sql`. A job that TMDb offers but no one has used yet will be missing, which does no harm for seeding.
+5. **Songs** take the richer option: a song is an entity (SONG) with its own credits (performer, writer, composer, label), nested under the film's `songs` block, as SONG above describes.
+6. **Logos** are out of scope for now: the pilot reads text only, including the text of the last card. Logo recognition comes later, working from the evidence frames kept for the credits; the `logos` block type stays in the vocabulary for that.

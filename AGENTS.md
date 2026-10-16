@@ -1,0 +1,35 @@
+# AGENTS.md - Agent guide for open-credits
+
+Single canonical guide for coding agents in this repository. `CLAUDE.md` only points here. Human-facing overview: [README.md](README.md).
+
+## What this repository is
+
+Crowdsourced OCR of the on-screen credits (opening and closing) of movies and series, from video files the contributor owns, into an editable master database, with contributions to TMDb and Wikidata by each contributor under their own account. Public repository `github.com/vaugouin/open-credits`, created 2026-10-16.
+
+It belongs to the **Agent BBB** ecosystem (repos under `%USERPROFILE%/Code/<repo>`, all converging on a shared MariaDB). Role: acquisition. The open-credits master database is the reference for credits; the T2S database holds a copy.
+
+## Where the decisions live
+
+The project charter (32 decisions, taken with Philippe on 2026-10-14 and 2026-10-15), the data-model task and the pilot are tracked in the backlog, not here:
+
+- `%USERPROFILE%/Nestor/projets/t2s-backlog/repos/open-credits.md` (OPEN-CREDITS-001 charter, -002 data model, -003 pilot).
+
+Read the charter before changing anything structural. Key decisions an agent must not contradict:
+
+- The client runs on the contributor's PC and **never uploads video**; it sends text and, optionally, cropped evidence frames.
+- **Classical OCR on CPU**; vision models only as a measured fallback.
+- **One editable master database** (on the VPS at first) with read-only copies; ordinary accounts; moderation on the TMDb model.
+- **Several submissions per title** are kept side by side; consolidated credits are computed from them. A single submission is authoritative.
+- Data under **CC0**, code under **MIT**.
+- Names of private individuals (crowdfunding backers, thanked persons) are stored but kept out of the public view and of contributions until the consent question is settled.
+
+## Pilot arrangement
+
+Results go to a local SQLite file, copied into the T2S MariaDB by a separate process, on the model of `sqlite-plex-to-tmdb` (sibling repository, which also maps Plex files to TMDb IDs). Plex data in MariaDB: `T_WC_TMDB_PLEX_*`.
+
+## Conventions
+
+- Python with `uv`. LF line endings (`.gitattributes`).
+- Never commit video files, frames, SQLite databases or secrets (`.gitignore`).
+- `.sql` files that must run on the VPS follow the ecosystem rule: committed and pushed first, then `~/docker/tools/runsqlvaugouindb.sh` (see `%USERPROFILE%/Code/tools/AGENTS.md`).
+- Documentation in English (public repository).

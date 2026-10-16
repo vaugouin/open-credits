@@ -1,0 +1,21 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Local data: pilot SQLite databases, extracted frames, video samples
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+frames/
+work/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Agent tooling
+.claude/
+.agents/

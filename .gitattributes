@@ -1,0 +1,11 @@
+# Line-ending policy: LF everywhere for the types this repository holds.
+# This machine has core.autocrlf=true; without these rules git would rewrite
+# LF to CRLF on checkout, and a CRLF shebang fails on Debian.
+.gitattributes text eol=lf
+*.md   text eol=lf
+*.py   text eol=lf
+*.sql  text eol=lf
+*.sh   text eol=lf
+*.txt  text eol=lf
+*.json text eol=lf
+*.toml text eol=lf

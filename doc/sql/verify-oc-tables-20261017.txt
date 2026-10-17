@@ -1,0 +1,30 @@
+-- verify-oc-tables.sql
+-- run on vaugouindb (container damp-vaugouin-com-mariadb-1) at 2026-10-17 15:42:00
+--
++-----------------------------+---------------+---------------+------------+--------+--------------------+
+| TABLE_NAME                  | columns_count | indexes_count | TABLE_ROWS | ENGINE | TABLE_COLLATION    |
++-----------------------------+---------------+---------------+------------+--------+--------------------+
+| T_WC_OC_BLOCK               |            15 |             5 |          0 | InnoDB | utf8mb4_unicode_ci |
+| T_WC_OC_COMPANY             |            14 |             7 |          0 | InnoDB | utf8mb4_unicode_ci |
+| T_WC_OC_COMPANY_CLASS       |            10 |             3 |          0 | InnoDB | utf8mb4_unicode_ci |
+| T_WC_OC_CONSOLIDATED_CREDIT |            20 |             8 |          0 | InnoDB | utf8mb4_unicode_ci |
+| T_WC_OC_CONTRIBUTOR         |            13 |             5 |          0 | InnoDB | utf8mb4_unicode_ci |
+| T_WC_OC_COPY                |            19 |             6 |          0 | InnoDB | utf8mb4_unicode_ci |
+| T_WC_OC_CREDIT              |            24 |             9 |          0 | InnoDB | utf8mb4_unicode_ci |
+| T_WC_OC_EDITION             |            13 |             5 |          0 | InnoDB | utf8mb4_unicode_ci |
+| T_WC_OC_FRAME               |            18 |             4 |          0 | InnoDB | utf8mb4_unicode_ci |
+| T_WC_OC_HISTORY             |            14 |             4 |          0 | InnoDB | utf8mb4_unicode_ci |
+| T_WC_OC_PART                |            14 |             5 |          0 | InnoDB | utf8mb4_unicode_ci |
+| T_WC_OC_PERSON              |            13 |             6 |          0 | InnoDB | utf8mb4_unicode_ci |
+| T_WC_OC_PLACE               |            11 |             4 |          0 | InnoDB | utf8mb4_unicode_ci |
+| T_WC_OC_REPORT              |            14 |             6 |          0 | InnoDB | utf8mb4_unicode_ci |
+| T_WC_OC_ROLE                |            18 |             7 |          0 | InnoDB | utf8mb4_unicode_ci |
+| T_WC_OC_ROLE_ALIAS          |            12 |             4 |          0 | InnoDB | utf8mb4_unicode_ci |
+| T_WC_OC_ROLE_MODIFIER       |            11 |             4 |          0 | InnoDB | utf8mb4_unicode_ci |
+| T_WC_OC_SEGMENT             |            16 |             5 |          0 | InnoDB | utf8mb4_unicode_ci |
+| T_WC_OC_SONG                |            10 |             4 |          0 | InnoDB | utf8mb4_unicode_ci |
+| T_WC_OC_SUBMISSION          |            25 |             7 |          0 | InnoDB | utf8mb4_unicode_ci |
+| T_WC_OC_TEXT_BOX            |            18 |             3 |          0 | InnoDB | utf8mb4_unicode_ci |
+| T_WC_OC_TEXT_LINE           |            20 |             3 |          0 | InnoDB | utf8mb4_unicode_ci |
+| T_WC_OC_WORK                |            20 |             9 |          0 | InnoDB | utf8mb4_unicode_ci |
++-----------------------------+---------------+---------------+------------+--------+--------------------+

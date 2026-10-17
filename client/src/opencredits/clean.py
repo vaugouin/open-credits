@@ -59,8 +59,9 @@ def katakana_twins(text: str) -> str:
     return text.translate(KATAKANA_TWINS)
 
 
-# Arabic letters that Persian writes with its own code points (yeh, kaf, and the final-form yeh)
-PERSIAN_FORMS = str.maketrans({"ي": "ی", "ى": "ی", "ك": "ک"})
+# Arabic letters that Persian writes with its own code points (yeh, kaf, and the final-form yeh), and the
+# Arabic-Indic digits, which Persian writes with its own (١٣٨٩ is ۱۳۸۹)
+PERSIAN_FORMS = str.maketrans({"ي": "ی", "ى": "ی", "ك": "ک", **{chr(0x0660 + d): chr(0x06f0 + d) for d in range(10)}})
 
 
 # credit words the Arabic-script model reads with kaf for gaf (the gaf's second stroke dropped); names are not

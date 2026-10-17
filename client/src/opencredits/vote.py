@@ -17,6 +17,37 @@ def same_box(g: dict, r: dict) -> bool:
     return ov > SPAN * max(g["x1"] - g["x0"], r["x1"] - r["x0"])
 
 
+RTL_GAP = 0.6    # words of one right-to-left line closer than this many character heights are one text
+
+
+def join_words_rtl(readings: list[dict]) -> list[dict]:
+    """Right-to-left scripts (Persian): the detector boxes each word, so the words of a name or a job are
+    joined, per frame, rightmost first. Columns stand far apart (A Separation: 280 px), words touch."""
+    out: list[dict] = []
+    by_frame: dict[int, list[dict]] = {}
+    for r in readings: by_frame.setdefault(r["t"], []).append(r)
+    for t, rs in sorted(by_frame.items()):
+        rows: list[list[dict]] = []
+        for r in sorted(rs, key=lambda r: (r["y0"] + r["y1"]) / 2):
+            if rows and abs((r["y0"] + r["y1"]) / 2 - (rows[-1][0]["y0"] + rows[-1][0]["y1"]) / 2) <= (r["y1"] - r["y0"]) / 2:
+                rows[-1].append(r)
+            else: rows.append([r])
+        for row in rows:
+            cur = None
+            for r in sorted(row, key=lambda r: -r["x1"]):
+                h = max(r["y1"] - r["y0"], 1)
+                if cur and cur["x0"] - r["x1"] < RTL_GAP * h:
+                    page = cur["y"] - (cur["y0"] + cur["y1"]) / 2        # page offset of this frame
+                    cur = dict(cur, x0=min(cur["x0"], r["x0"]), y0=min(cur["y0"], r["y0"]), y1=max(cur["y1"], r["y1"]),
+                               text=f'{cur["text"]} {r["text"]}', conf=min(cur["conf"], r["conf"]))
+                    cur["y"] = page + (cur["y0"] + cur["y1"]) / 2
+                else:
+                    if cur: out.append(cur)
+                    cur = dict(r)
+            if cur: out.append(cur)
+    return out
+
+
 def vote(readings: list[dict], frame_height: int) -> list[dict]:
     rs = [r for r in readings if r["y0"] > EDGE and r["y1"] < frame_height - EDGE]
     groups: list[dict] = []

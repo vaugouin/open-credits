@@ -15,12 +15,13 @@ Python package `opencredits` (`src/opencredits/`), the contributor-side client. 
 
 ```bash
 uv sync --extra paddle --extra tesseract
-uv run opencredits run VIDEO --from S --to S --work DIR [--engine paddle|tesseract] [--lang en|ja|zh] [--tmdb-credits FILE --tmdb-movie ID]
+uv run opencredits run VIDEO --from S --to S --work DIR [--engine paddle|tesseract] [--lang en|ja|zh|fa] [--tmdb-credits FILE --tmdb-movie ID]
 ```
 
 ## Known limits (pilot)
 
-- One rolling segment per run, light text; the speed can change inside the segment (Alien: 120 then 180 px/s). Painted backgrounds work through the text mask (Spirited Away).
+- One rolling segment per run, light text; the speed can change inside the segment (Alien: 120 then 180 px/s). Painted backgrounds and live footage work through the text mask (Spirited Away, A Separation).
 - No opening-credits or end cards stage yet (Spirited Away's Disney copy opens its end credits with cards), no SQLite or submission bundle output yet.
 - Paddle drops a tiny opening quote and reads a capital I as l when the typeface makes them identical; in Japanese it sometimes answers a simplified Chinese form (岛 for 島) or a kanji for its katakana twin (八 for ハ). `clean.py` corrects these; other single-kanji confusions (乾 for 幹, 系 for 糸) remain.
+- Persian: the Arabic-script model (`arabic_PP-OCRv5_mobile_rec`) boxes word by word and often drops the gaf's second stroke (ک for گ). Job words are corrected from a short list in `clean.py`; names are not (a kaf can be right), and the matching folds گ with ک. TMDb names that exist only romanised cannot be matched yet.
 - Joining spaced-out CJK names is a length heuristic (pieces of at most 2 characters, at most 4 together): the gap alone cannot tell a spaced name from two adjacent columns.

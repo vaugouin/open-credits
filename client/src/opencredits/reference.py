@@ -27,6 +27,12 @@ def load_tmdb(path: Path, movie: int) -> dict[str, dict]:
     return people
 
 
+# Arabic and Persian code points for the same letter folded to one (yeh, kaf), zero-width non-joiner to a space;
+# gaf folded with kaf too, since the Arabic-script model often drops the gaf's second stroke (كروه for گروه)
+ARABIC_SCRIPT = str.maketrans({"ي": "ی", "ى": "ی", "ك": "ک", "گ": "ک",
+                               "‌": " "})
+
+
 @lru_cache(maxsize=1)
 def _opencc():
     import opencc
@@ -38,6 +44,7 @@ def fold(s: str) -> str:
     Japanese form (TMDb holds many Japanese names in simplified Chinese: 石桥彻郎 for 石橋徹郎)."""
     if re.search(r"[㐀-鿿]", s):
         s2t, t2jp = _opencc(); s = t2jp.convert(s2t.convert(s))
+    s = s.translate(ARABIC_SCRIPT)
     s = "".join(c for c in unicodedata.normalize("NFKD", s.lower()) if not unicodedata.combining(c))
     return re.sub(r"\s+", " ", re.sub(r"[^\w ]", " ", s)).strip()
 

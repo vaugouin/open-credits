@@ -59,10 +59,28 @@ def katakana_twins(text: str) -> str:
     return text.translate(KATAKANA_TWINS)
 
 
+# Arabic letters that Persian writes with its own code points (yeh, kaf, and the final-form yeh)
+PERSIAN_FORMS = str.maketrans({"ي": "ی", "ى": "ی", "ك": "ک"})
+
+
+# credit words the Arabic-script model reads with kaf for gaf (the gaf's second stroke dropped); names are not
+# corrected, since a kaf in a name can be right
+PERSIAN_GAF = {"کارکردان": "کارگردان", "کروه": "گروه", "بازیکر": "بازیگر", "کذار": "گذار"}
+
+
+def persian_forms(text: str) -> str:
+    """Persian credits: the Arabic yeh and kaf an Arabic-script model may answer become the Persian letters,
+    and credit words read with kaf for gaf get their gaf back."""
+    text = text.translate(PERSIAN_FORMS)
+    for wrong, right in PERSIAN_GAF.items(): text = text.replace(wrong, right)
+    return text
+
+
 def clean(lines: list[dict], name_x0: int, lang: str = "en") -> list[dict]:
     for l in lines:
         text = l["text"]
         if lang == "ja": text = katakana_twins(japanese_forms(text))
+        if lang == "fa": text = persian_forms(text)
         text = capital_i(opening_quote(text), l["x0"] > name_x0)
         if text != l["text"]: l["raw"], l["text"] = l["text"], text
     return lines

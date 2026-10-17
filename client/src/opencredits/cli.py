@@ -19,7 +19,7 @@ def stage_json(path: Path, build):
 
 def run(a) -> None:
     work = Path(a.work); work.mkdir(parents=True, exist_ok=True)
-    end = a.to if a.to is not None else int(frames.duration(a.video))
+    end = int(frames.duration(a.video)) if a.to is None else min(a.to, int(frames.duration(a.video)))   # a window past the end would re-extract every run
     print(f"1. frames {a.start}..{end} s")
     fr = frames.extract(a.video, a.start, end, work / "frames")
     h = Image.open(next(iter(fr.values()))).height; w = Image.open(next(iter(fr.values()))).width
@@ -42,6 +42,7 @@ def run(a) -> None:
     readings = stage_json(work / f"readings-{tag}.json", read)["readings"]
 
     print("5. vote")
+    if a.lang in ("fa",): readings = vote.join_words_rtl(readings)
     lines = vote.vote(readings, h)
     if a.lang in ("ja", "zh"): lines = vote.join_spaced(lines)
     lines = clean.clean(lines, name_x0=w // 2 - 20, lang=a.lang)

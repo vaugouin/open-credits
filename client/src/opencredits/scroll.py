@@ -11,6 +11,7 @@ MIN_INK = 50       # text pixels in a frame below which it is blank
 MAX_SHIFT = 400    # px per frame searched upward
 STEADY = 0.85      # correlation of row profiles above which the shift is trusted
 MIN_SHIFT = 20     # px; below this the picture is not scrolling
+MIN_ROLL = 10      # frames; a shorter steady run is a camera move or a sliding title, not a roll
 
 
 def text_mask(path: Path) -> np.ndarray:
@@ -50,6 +51,7 @@ def find_roll(rows: list[tuple[int, float, int, float]], max_gap: int = 2) -> tu
         else: runs.append(cur); cur = [t]
     runs.append(cur)
     best = max(runs, key=lambda r: r[-1] - r[0])
+    if best[-1] - best[0] + 1 < MIN_ROLL: raise ValueError("no roll: the longest steady scroll is too short")
     return best[0] - 1, best[-1]
 
 

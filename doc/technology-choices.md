@@ -108,7 +108,7 @@ submission-<uuid>.zip
 └── native/                the OCR engine's own output (optional, for reprocessing)
 ```
 
-- `submission.json` carries a `format_version`. A **JSON Schema** published in this repository defines it; the client checks its own bundle before sending, the importer checks it again on arrival.
+- `submission.json` carries a `format_version`. A **JSON Schema** published in this repository defines it (`schema/submission.schema.json`, described in `doc/submission-format.md`); the client checks its own bundle before sending, the importer checks it again on arrival.
 - It contains data only: the logical names of the data model, UUIDs as text, times in milliseconds. Never a file path (private) nor any SQL.
 - Size: a film yields a few hundred credits and some thousands of text lines, well under a megabyte compressed. Frames are the bulk.
 - The same importer serves the pilot: the pilot's client writes bundles and the importer loads them into `T_WC_OC_*`, so the path to the master is tested from the first title.

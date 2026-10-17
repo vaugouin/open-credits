@@ -1,0 +1,140 @@
+{
+  "format_version": "0.1.0",
+  "submission": {
+    "id": "01920000-0000-7000-8000-000000000001",
+    "created_at": "2026-10-17T14:05:00Z",
+    "client": { "name": "open-credits", "version": "0.0.1" },
+    "ocr": {
+      "engine": "rapidocr",
+      "engine_version": "3.0.0",
+      "models": "PP-OCRv5 mobile",
+      "parameters": { "frame_step_ms": 500, "min_confidence": 0.5 }
+    },
+    "licence": "CC0-1.0",
+    "has_evidence_frames": true
+  },
+  "work": {
+    "kind": "movie",
+    "tmdb_movie_id": 348,
+    "imdb_id": "tt0078748",
+    "wikidata_id": "Q103569",
+    "title": "Alien",
+    "year": 1979
+  },
+  "copy": {
+    "fingerprint": "3a6e6063ddbcc44bebbc2c5d51def87b1fdd0603702f733299afdf868c4ddc91",
+    "duration_ms": 7016000,
+    "width": 1920,
+    "height": 1080,
+    "fps": 23.976,
+    "edition_hint": "Theatrical",
+    "version_language": "en",
+    "source": "bluray",
+    "parts": [
+      {
+        "part_index": 1,
+        "opensubtitles_hash": "8e245d9679d31e12",
+        "file_size": 15402834912,
+        "duration_ms": 7016000,
+        "offset_ms": 0
+      }
+    ]
+  },
+  "segments": [
+    {
+      "id": "01920000-0000-7000-8000-000000000010",
+      "part_index": 1,
+      "kind": "closing_credits",
+      "start_ms": 6800000,
+      "end_ms": 7016000,
+      "detected_by": "plex_marker",
+      "layout": "rolling",
+      "scroll_px_per_s": 62.5,
+      "frames": [
+        {
+          "id": "01920000-0000-7000-8000-000000000020",
+          "timecode_ms": 6812000,
+          "phash": "c3a1f0e07c381e0f",
+          "page_offset_px": 750,
+          "evidence": {
+            "file": "frames/01920000-0000-7000-8000-000000000020.webp",
+            "crop": { "x": 400, "y": 620, "w": 1120, "h": 60 }
+          },
+          "text_boxes": [
+            { "x": 420, "y": 630, "w": 520, "h": 40, "text": "Director of Photography", "confidence": 0.97, "font_height_px": 32, "is_upper_case": false },
+            { "x": 1010, "y": 630, "w": 300, "h": 40, "text": "DEREK VANLINT", "confidence": 0.95, "font_height_px": 32, "is_upper_case": true }
+          ]
+        },
+        {
+          "id": "01920000-0000-7000-8000-000000000021",
+          "timecode_ms": 6812500,
+          "phash": "c3a1f0e07c381e1f",
+          "page_offset_px": 781,
+          "text_boxes": [
+            { "x": 421, "y": 599, "w": 520, "h": 40, "text": "Director of Photography", "confidence": 0.96, "font_height_px": 32, "is_upper_case": false },
+            { "x": 1011, "y": 599, "w": 300, "h": 40, "text": "DEREK VANL1NT", "confidence": 0.81, "font_height_px": 32, "is_upper_case": true }
+          ]
+        }
+      ],
+      "text_lines": [
+        {
+          "id": "01920000-0000-7000-8000-000000000030",
+          "y_page": 1380,
+          "x": 420,
+          "w": 520,
+          "h": 40,
+          "text": "Director of Photography",
+          "readings": 2,
+          "agreeing": 2,
+          "confidence": 0.97,
+          "frame_ids": ["01920000-0000-7000-8000-000000000020", "01920000-0000-7000-8000-000000000021"],
+          "first_ms": 6801000,
+          "last_ms": 6818000
+        },
+        {
+          "id": "01920000-0000-7000-8000-000000000031",
+          "y_page": 1380,
+          "x": 1010,
+          "w": 300,
+          "h": 40,
+          "text": "DEREK VANLINT",
+          "readings": 2,
+          "agreeing": 1,
+          "confidence": 0.9,
+          "frame_ids": ["01920000-0000-7000-8000-000000000020", "01920000-0000-7000-8000-000000000021"],
+          "first_ms": 6801000,
+          "last_ms": 6818000
+        }
+      ],
+      "blocks": [
+        {
+          "id": "01920000-0000-7000-8000-000000000040",
+          "display_order": 1,
+          "block_type": "crew",
+          "unit": "main",
+          "line_ids": ["01920000-0000-7000-8000-000000000030", "01920000-0000-7000-8000-000000000031"],
+          "credits": [
+            {
+              "id": "01920000-0000-7000-8000-000000000050",
+              "display_order": 1,
+              "entity_kind": "person",
+              "name_raw": "DEREK VANLINT",
+              "entity_ref": "01920000-0000-7000-8000-000000000060",
+              "role_raw": "Director of Photography",
+              "role_code": "camera.director_of_photography",
+              "line_ids": ["01920000-0000-7000-8000-000000000030", "01920000-0000-7000-8000-000000000031"],
+              "parse_confidence": 0.95
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "entities": [
+    {
+      "id": "01920000-0000-7000-8000-000000000060",
+      "kind": "person",
+      "display_name": "Derek Vanlint"
+    }
+  ]
+}

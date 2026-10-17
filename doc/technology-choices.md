@@ -1,6 +1,6 @@
 # open-credits technology choices
 
-Status: 2026-10-16, candidates compared before the pilot (backlog ticket OPEN-CREDITS-003). One choice is made: **SQLite** for the client and the pilot. The others are recommendations, to be settled by the pilot's measures (charter, decision 27: recall on known credits, ratio of lines found, precision on a sample, CPU time per film).
+Status: 2026-10-16, candidates compared before the pilot (backlog ticket OPEN-CREDITS-003); updated 2026-10-17. Three choices are made by Philippe: **SQLite** on the client, **MariaDB** for the master (`T_WC_OC_*` tables in the T2S database), and **JSON bundles** for submissions. The others are recommendations, to be settled by the pilot's measures (charter, decision 27: recall on known credits, ratio of lines found, precision on a sample, CPU time per film).
 
 Versions and licences were checked on the web on 2026-10-16. Speed and accuracy figures are the projects' own unless stated otherwise; the pilot measures them on real credits.
 
@@ -51,20 +51,35 @@ The review views are static HTML generated from SQLite and opened in a browser, 
 
 **Recommendation:** Python for the pilot and the first client. If installation becomes the main obstacle for volunteers, rewrite only the hot path in Rust (oar-ocr with the same models), which keeps results comparable.
 
-## 4. Database: SQLite (chosen)
+## 4. Databases: SQLite on the client, MariaDB for the master (chosen)
 
-Chosen by Philippe for the client and the pilot (charter, decision 23): small, fast and portable.
+### Client: SQLite
+
+Chosen by Philippe for the client (charter, decision 23): small, fast and portable. It holds the client's working data (frames, text boxes, votes, parsed credits) and feeds the review views.
 
 | Pros | Cons |
 |---|---|
-| One file, no server: nothing for a volunteer to install or administer | **One writer at a time.** WAL mode lets readers work while one process writes; enough for one client, a limit for a master with many simultaneous contributors |
-| Portable across Windows, macOS and Linux, byte for byte: the file is the dump. "Anyone can host a copy" (decision 19) becomes "copy the file" | **No accounts or permissions** in the database: access control lives in the application (the master's API) |
+| One file, no server: nothing for a volunteer to install or administer | **One writer at a time.** WAL mode lets readers work while one process writes, and a second writer waits instead of failing; enough for one client. Several workers on one machine can each write their own file, merged afterwards |
+| Portable across Windows, macOS and Linux, byte for byte: a contributor's whole working state is one file to back up or move | **No accounts or permissions** in the database; harmless on a single-user client |
 | In Python's standard library; mature, heavily tested, used by Plex itself | **Unsafe on network shares** (SMB, NFS): file locking is unreliable, so the database must sit on a local disk, never on the NAS beside the videos |
 | Fast for reads and for bulk inserts in one transaction; JSON functions; FTS5 full-text search for names and wordings | **Loose typing** by default: use `STRICT` tables so a text cannot land in an integer column |
 | Easy to inspect (DB Browser for SQLite, the `sqlite3` shell) and to diff between versions | **No native UUID type**: store UUIDs as 16-byte `BLOB` (compact) or 36-character `TEXT` (readable); one choice for the whole schema |
-| Copied into MariaDB by a separate process, as `sqlite-plex-to-tmdb` already does (decision 23) | `ALTER TABLE` is limited: some schema changes mean rebuilding a table, so migrations need a small versioned script (`PRAGMA user_version`) |
+| Never sent as such: the client exports a JSON bundle per submission (section 6), so its schema can change without breaking the master | `ALTER TABLE` is limited: some schema changes mean rebuilding a table, so migrations need a small versioned script (`PRAGMA user_version`) |
 
-**For the master** (decision 29, on the VPS), SQLite in WAL mode holds at the start, since submissions arrive one at a time through the API. If concurrent writes grow (many contributors, moderation, the community editing at once), the master moves to PostgreSQL or MariaDB while the clients stay on SQLite. The schema should stay portable for that: no SQLite-only types, UUIDs in one format.
+### Master: `T_WC_OC_*` tables in the T2S MariaDB
+
+Decided by Philippe on 2026-10-17, revising charter decision 30 ("open-credits is the master; the T2S database holds a copy"): the master (decision 29, on the VPS) lives in the MariaDB database of the T2S stack, in `T_WC_OC_*` tables following the ecosystem's conventions. The reason: comparing the credits with TMDb and Wikidata (layer 4) becomes a plain join with the `T_WC_TMDB_*` and `T_WC_WIKIDATA_*` tables already there, instead of API calls or reference extracts.
+
+| Pros | Cons |
+|---|---|
+| Already run, backed up and tuned on the VPS; no new server | Production data of the T2S stack and public writes share one server: the importer and the site need their own MariaDB account, with write rights on `T_WC_OC_*` only and read rights on the tables they join |
+| Layer 4 is SQL: a consolidated credit is checked against TMDb and Wikidata credits by a join; the ROLE table is seeded from the TMDb jobs by an `INSERT ... SELECT` | "Anyone can host a copy" (decision 19) needs **export scripts** that dump the `T_WC_OC_*` tables only, never the rest of the T2S database |
+| Many writers at once (row locks): the importer, moderators and website edits can write at the same time | The schema exists twice, lower-case names in the client's SQLite and `T_WC_OC_*` in MariaDB: one definition, mapped by the importer |
+| Accounts, permissions, strict types, full `ALTER TABLE` | UUID storage must match on both sides: MariaDB's native `UUID` type (10.7 and later, stored in 16 bytes) or `BINARY(16)`, against a 16-byte `BLOB` in SQLite |
+
+**Keeping open-credits separable.** The client and the bundle format know nothing of the T2S stack. Only the master's server code touches MariaDB, and only two parts of it read non-OC tables: the layer 4 comparisons and the ROLE seeding. Keeping those in one module, and the `T_WC_OC_*` tables free of foreign keys to other `T_WC_*` tables (TMDb and Wikidata IDs stored as plain values), means the OC tables can be exported, or moved to their own database later, without untangling them.
+
+**Concurrency comes from a queue, not from the database.** The API only stores each uploaded bundle in an incoming folder, which any number of contributors can do at once. One import process validates each bundle and loads it into `T_WC_OC_*`, one bundle per transaction. A bad bundle is rejected whole and never half-loaded.
 
 ## 5. Other choices
 
@@ -77,10 +92,26 @@ Chosen by Philippe for the client and the pilot (charter, decision 23): small, f
 | **Evidence frames** | WebP; AVIF; JPEG; PNG | WebP is small, decoded by every browser and by Pillow; AVIF is smaller still but slower to encode; JPEG blurs small text; PNG is lossless but large | WebP, cropped to the line |
 | **Name matching** (entities, roles) | RapidFuzz; `thefuzz`; full-text search (FTS5) | RapidFuzz is fast (C++), MIT, already used in the ecosystem; `thefuzz` is slower; FTS5 finds candidates, RapidFuzz scores them | FTS5 for candidates, RapidFuzz for scores |
 | **Review views** | static HTML from templates (Jinja2); a local web server (FastAPI, Flask); a desktop interface (Qt, Tauri) | Static HTML needs nothing running and can be zipped and shared; a local server allows editing in place; a desktop interface is the heaviest to build | Static HTML in the pilot; editing moves to the master site |
-| **Submission format** (client to master) | the SQLite file of one submission; JSON or NDJSON; Parquet | A per-submission SQLite file reuses the client's schema and is self-describing; JSON is easy to validate and read but larger; Parquet is compact but opaque to volunteers | A SQLite file per submission, with evidence frames beside it |
+| **Submission format** (client to master) | JSON in a zip; the SQLite file of one submission; Parquet | JSON is plain data, checked against a schema before anything touches the master, readable by a volunteer, and independent of the client's tables; a SQLite file reuses the client's schema but is a database written by a stranger, which the master would have to open defensively; Parquet is compact but opaque to volunteers | **Chosen (2026-10-17):** a JSON bundle per submission, section 6 |
 | **Master API and site** | FastAPI (Python); Django; PHP as in `tmdb-front` | FastAPI is already run in the ecosystem (`fastapi-text2sql`) and shares the client's language; Django brings accounts and an admin out of the box but more weight; PHP fits `tmdb-front` but splits the code base | FastAPI, with Django kept in mind if accounts and moderation screens grow |
 | **UUIDs** | UUID version 7 (standard library since Python 3.14, or the `uuid6` package); version 4 | Version 7 is time-ordered, so inserts stay grouped in the index; version 4 is random and fragments indexes | Version 7 (data model, Identifiers) |
 | **Client packaging** | PyInstaller; Nuitka; Briefcase; `uv tool install` | PyInstaller is the most used, but its executables are large and sometimes flagged by antivirus; Nuitka compiles to C, smaller and faster but slower to build; Briefcase makes native installers; `uv tool install` is light but assumes a technical volunteer | `uv tool install` for the pilot and early volunteers, an installer later |
+
+## 6. Submission bundle (chosen)
+
+One submission (one run of the client on one copy) travels as one zip:
+
+```
+submission-<uuid>.zip
+├── submission.json        the submission, its copy and parts, segments, text lines, credits
+├── frames/<uuid>.webp     evidence frames, cropped to the line (optional, decision 3)
+└── native/                the OCR engine's own output (optional, for reprocessing)
+```
+
+- `submission.json` carries a `format_version`. A **JSON Schema** published in this repository defines it; the client checks its own bundle before sending, the importer checks it again on arrival.
+- It contains data only: the logical names of the data model, UUIDs as text, times in milliseconds. Never a file path (private) nor any SQL.
+- Size: a film yields a few hundred credits and some thousands of text lines, well under a megabyte compressed. Frames are the bulk.
+- The same importer serves the pilot: the pilot's client writes bundles and the importer loads them into `T_WC_OC_*`, so the path to the master is tested from the first title.
 
 ## Sources
 

@@ -6,7 +6,7 @@ Single canonical guide for coding agents in this repository. `CLAUDE.md` only po
 
 Crowdsourced OCR of the on-screen credits (opening and closing) of movies and series, from video files the contributor owns, into an editable master database, with contributions to TMDb and Wikidata by each contributor under their own account. Public repository `github.com/vaugouin/open-credits`, created 2026-10-16.
 
-It belongs to the **Agent BBB** ecosystem (repos under `%USERPROFILE%/Code/<repo>`, all converging on a shared MariaDB). Role: acquisition. The open-credits master database is the reference for credits; the T2S database holds a copy.
+It belongs to the **Agent BBB** ecosystem (repos under `%USERPROFILE%/Code/<repo>`, all converging on a shared MariaDB). Role: acquisition. The open-credits master database lives in the T2S MariaDB as `T_WC_OC_*` tables (decided 2026-10-17, revising charter decision 30), so credits can be joined with the TMDb and Wikidata tables; public copies come from export scripts that dump the `T_WC_OC_*` tables only.
 
 ## Where the decisions live
 
@@ -25,7 +25,7 @@ Read the charter before changing anything structural. Key decisions an agent mus
 
 ## Pilot arrangement
 
-Results go to a local SQLite file, copied into the T2S MariaDB by a separate process, on the model of `sqlite-plex-to-tmdb` (sibling repository, which also maps Plex files to TMDb IDs). Plex data in MariaDB: `T_WC_TMDB_PLEX_*`.
+The client works in a local SQLite file and exports one JSON bundle per submission; an importer loads the bundles into the `T_WC_OC_*` tables (see `doc/technology-choices.md`, sections 4 and 6). `sqlite-plex-to-tmdb` (sibling repository) maps Plex files to TMDb IDs. Plex data in MariaDB: `T_WC_TMDB_PLEX_*`. Keep the `T_WC_OC_*` tables free of foreign keys to other `T_WC_*` tables, and the code that reads non-OC tables (layer 4 comparisons, ROLE seeding) in one module.
 
 ## Conventions
 

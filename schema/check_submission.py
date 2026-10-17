@@ -110,6 +110,16 @@ def check_references(doc, zip_names):
     return errors
 
 
+def describe_work(w):
+    """The work as the bundle names it, to eyeball that title_hint and the ids agree."""
+    ids = [f"{k} {w[k]}" for k in ("tmdb_movie_id", "tmdb_serie_id", "imdb_id", "wikidata_id") if k in w]
+    if w["kind"] == "episode" and "season_number" in w:
+        ids.insert(1, f"S{w['season_number']:02}E{w.get('episode_number', 0):02}")
+    lang = f" [{w['title_language']}]" if "title_language" in w else ""
+    year = f" ({w['year']})" if "year" in w else ""
+    return f"{w['kind']} \"{w['title_hint']}\"{lang}{year}, {', '.join(ids)}"
+
+
 def load(path):
     if path.suffix.lower() == ".zip":
         with zipfile.ZipFile(path) as z:
@@ -131,7 +141,7 @@ def main(paths):
             for e in errors:
                 print(f"  {e}")
         else:
-            print(f"{name}: valid")
+            print(f"{name}: valid, {describe_work(doc['work'])}")
     return 1 if failed else 0
 
 

@@ -36,7 +36,12 @@ Examples below are illustrative. The pilot will replace them with lines read fro
 | `kind` | `movie`, `episode`. A series or a season is never credited as such: credits are read per episode; series-level views are computed |
 | `tmdb_movie_id` or `tmdb_serie_id` + `season_number` + `episode_number` | the T2S join keys (`T_WC_TMDB_PLEX_MOVIE` gives them through the Plex catalogue) |
 | `imdb_id`, `wikidata_id` | optional |
-| `title`, `year` | display only |
+| `original_title`, `original_language` | the reference title, in the work's original language (TMDb `original_title` and `original_language`, Wikidata P1476 when TMDb has nothing). Filled by the importer from TMDb or Wikidata, **never from the submission**: the title a contributor's Plex shows depends on the language of their library ("Le Parrain" in one, "The Godfather" in another). For an episode, the episode's own title when it has one |
+| `title_en` | optional, English title for display, as TMDb shows it by default |
+| `serie_original_name` | episodes only: the series' name in its original language, displayed with `season_number` and `episode_number` |
+| `year` | release year (first air date for an episode) |
+
+The titles are copied into `T_WC_OC_WORK` as plain values, so the public exports stay readable without the TMDb tables, and no foreign key leaves the OC tables (decision 1). The submission carries only a `title_hint`, in whatever language the client found it, with its `title_language` when known: the importer compares it with the title of the work its external ids point to, as a sanity check, and does not store it as the title.
 
 Below the work, three levels, which Plex already has (a movie, its media, their parts):
 
@@ -356,7 +361,10 @@ erDiagram
         int episode_number
         string imdb_id
         string wikidata_id
-        string title
+        string original_title "from TMDb or Wikidata"
+        string original_language
+        string title_en
+        string serie_original_name "episodes"
         int year
     }
     EDITION {

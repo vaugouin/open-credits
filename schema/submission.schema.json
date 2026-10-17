@@ -113,7 +113,7 @@
       "description": "What the credits belong to. A series or a season is never credited as such: credits are read per episode.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["kind", "title"],
+      "required": ["kind", "title_hint"],
       "properties": {
         "kind": { "enum": ["movie", "episode"] },
         "tmdb_movie_id": { "type": "integer", "minimum": 1 },
@@ -122,9 +122,15 @@
         "episode_number": { "type": "integer", "minimum": 0 },
         "imdb_id": { "type": "string", "pattern": "^tt[0-9]{7,}$" },
         "wikidata_id": { "$ref": "#/$defs/wikidata_id" },
-        "title": { "type": "string", "minLength": 1 },
+        "title_hint": {
+          "description": "The title as the client found it (usually from Plex), in whatever language the contributor's library uses. A sanity check on the external ids, never the work's title: the master takes original_title from TMDb or Wikidata.",
+          "type": "string",
+          "minLength": 1
+        },
+        "title_language": { "description": "Language of title_hint, when the client knows it (the Plex library language).", "$ref": "#/$defs/language" },
         "year": { "type": "integer", "minimum": 1888, "maximum": 2100 }
       },
+      "dependentRequired": { "title_language": ["title_hint"] },
       "allOf": [
         {
           "if": { "properties": { "kind": { "const": "movie" } } },

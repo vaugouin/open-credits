@@ -30,7 +30,7 @@ The client runs the checker before sending; the importer runs it again on arriva
 ```
 format_version
 submission      id, created_at, client, ocr engine and parameters, vocabulary_version, licence (always CC0-1.0)
-work            kind, TMDb / IMDb / Wikidata ids, title, year
+work            kind, TMDb / IMDb / Wikidata ids, title_hint and title_language, year
 copy            fingerprint, duration, resolution, edition_hint, version_language, source
   parts[]       part_index, opensubtitles_hash, file_size, duration_ms, offset_ms
 segments[]      part_index, kind, start/end, detected_by, layout, scroll speed
@@ -48,6 +48,7 @@ entities[]      layer 3c: the persons, companies, places and songs the credits p
 - **No contributor identity.** The master takes it from the authenticated account that uploads the bundle; a bundle cannot claim to come from someone else.
 - **Client UUIDs (version 7) for what belongs to the submission**: the submission, segments, frames, text lines, blocks, credits, proposed entities. The master keeps them as primary keys; version 7 makes collisions a non-issue.
 - **No ids for shared rows.** The copy is identified by its `fingerprint`, a part by its `opensubtitles_hash` and size, a work by its external ids, an entity by its external ids when it has them. The client cannot know the master's ids for these, and does not need to.
+- **No title of record.** `title_hint` is what the client found, in the language of the contributor's library; it is a sanity check on the external ids. The master's `original_title` comes from TMDb or Wikidata.
 - **No edition.** The client sends `edition_hint`; grouping copies into editions is done by the master and the community.
 - **Times are in milliseconds within the part** (`segment.part_index` says which part); the part's `offset_ms` gives the time in the copy.
 - **Raw wording always travels with the interpretation**: `name_raw` beside `entity_ref`, `role_raw` beside `role_code` and `role_modifiers`. The interpretation can be redone; the wording is the evidence.
@@ -61,6 +62,7 @@ JSON Schema cannot follow references, so `check_submission.py` checks:
 - `entity_ref`, `vendor_entity_ref`, `role_target_entity_ref` and `song_ref` point to an entity of the right kind;
 - parts are numbered 1, 2, 3 without gaps, each `offset_ms` is the sum of the previous durations, and the copy `fingerprint` is the SHA-256 of the lines `<opensubtitles_hash>:<file_size>` in part order;
 - segments lie inside their part, frames inside their segment, `agreeing <= readings`, `first_ms <= last_ms`;
+- prints the work as the bundle describes it (kind, external ids, `title_hint`, year), so whoever runs it can see at a glance that the ids and the title agree; the importer does the same comparison against TMDb and Wikidata;
 - in a zip, every evidence file named in `submission.json` is present, and named `frames/<frame id>.webp`.
 
 ## Open points

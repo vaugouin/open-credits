@@ -23,6 +23,7 @@ Examples below are illustrative. The pilot will replace them with lines read fro
 - Every row of the master database has a **UUID** (version 7, time-ordered) as its primary key: copies and dumps can be compared and forked without key collisions (charter, decision 24).
 - External identifiers are **attributes, never keys**: TMDb ids (`int`), IMDb ids (`tt…`, `nm…`, `co…`), Wikidata Q-ids. A credit stays valid when an external id changes or disappears.
 - Physical table names: the names below are logical; in the master each table is `T_WC_OC_<NAME>` (decision 1 at the end).
+- Table definitions: [`sql/OC-tables.sql`](sql/OC-tables.sql) for the master (MariaDB, with the mapping from logical to physical column names in its header: `id` becomes `ID_OC_<TABLE>`, `tmdb_person_id` becomes `ID_PERSON` as in `T_WC_TMDB_PERSON`, and so on) and [`sql/client-sqlite.sql`](sql/client-sqlite.sql) for the client's SQLite file, which keeps the logical names.
 
 ---
 
@@ -194,8 +195,8 @@ A **credit** is one assertion: an entity, a role, on this work. It always keeps 
 
 | Entity | Fields | Links |
 |---|---|---|
-| **PERSON** | `id`, `display_name`, `is_private_individual` | `tmdb_person_id`, `wikidata_id`, `imdb_nm` |
-| **COMPANY** | `id`, `display_name`, `company_class` (layer 5), `country` | `tmdb_company_id`, `wikidata_id`, `imdb_co` |
+| **PERSON** | `id`, `display_name`, `is_private_individual` | `tmdb_person_id`, `wikidata_id`, `imdb_id` (`nm…`) |
+| **COMPANY** | `id`, `display_name`, `company_class` (layer 5), `country` | `tmdb_company_id`, `wikidata_id`, `imdb_id` (`co…`) |
 | **PLACE** | `id`, `display_name`, `place_type` (country, region, city, structure, studio facility, nature) | `wikidata_id` (P131 gives the hierarchy), T2S `T_WC_T2S_LOCATION` |
 | **SONG** | `id`, `title_raw` | `wikidata_id`; its own credits (performer, writer, label) are credits whose work is the song, nested under the film's `songs` block |
 
@@ -371,6 +372,7 @@ erDiagram
         uuid id PK
         uuid work_id FK
         string label "theatrical, directors_cut, extended, tv_cut, unrated, other"
+        string label_text "free text, for other"
         int nominal_runtime_ms
         string status "proposed or confirmed"
     }
@@ -401,12 +403,19 @@ erDiagram
         uuid id PK
         uuid contributor_id FK
         uuid copy_id FK
+        string format_version
+        string client_name
         string client_version
         string ocr_engine
         string ocr_engine_version
+        string ocr_models
         json parameters
         string vocabulary_version
-        datetime submitted_at
+        string title_hint "sanity check only"
+        string title_language
+        bool has_evidence_frames
+        datetime created_at "end of the run"
+        datetime submitted_at "arrival"
         string status "received, parsed, published, rolled_back"
         string licence "CC0-1.0"
     }
@@ -450,6 +459,7 @@ erDiagram
         int page_offset_px
         bool has_text
         string evidence_path "optional WebP"
+        int crop_x "crop_y, crop_w, crop_h"
     }
     TEXT_BOX {
         uuid id PK
@@ -535,7 +545,7 @@ erDiagram
         bool is_private_individual
         int tmdb_person_id
         string wikidata_id
-        string imdb_nm
+        string imdb_id "nm..."
     }
     COMPANY {
         uuid id PK
@@ -544,7 +554,7 @@ erDiagram
         string country
         int tmdb_company_id
         string wikidata_id
-        string imdb_co
+        string imdb_id "co..."
     }
     PLACE {
         uuid id PK
@@ -575,22 +585,25 @@ erDiagram
         uuid id PK
         uuid work_id FK
         uuid role_id FK
+        string entity_kind
         uuid entity_id FK
         string name_display
         string character_display
         int display_order
-        int support "submissions and copies"
+        int support "submissions"
+        int support_copies "distinct copies"
         float score "weighted by reputation"
         string status "proposed, confirmed, locked, rejected"
         json source_credit_ids "evidence chain"
+        bool is_private_individual
     }
     HISTORY {
         uuid id PK
         uuid consolidated_credit_id FK
         uuid contributor_id FK
         datetime edited_at
-        json before
-        json after
+        json value_before
+        json value_after
         string reason
     }
     REPORT {
@@ -610,6 +623,7 @@ erDiagram
         uuid parent_role_id FK
         string tmdb_department
         string tmdb_job
+        int tmdb_credit_count "seeding weight"
         string wikidata_property "dedicated or P3092"
         string wikidata_job_item "P3831 value"
         string status "active or proposed"

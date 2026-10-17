@@ -30,6 +30,7 @@ The client works in a local SQLite file and exports one JSON bundle per submissi
 ## Conventions
 
 - Python with `uv`. LF line endings (`.gitattributes`).
+- Table definitions: `doc/sql/OC-tables.sql` (master, `T_WC_OC_*`, T2S conventions: upper-case columns, standard columns, no foreign key constraints, native `uuid` keys) and `doc/sql/client-sqlite.sql` (client, logical names, STRICT tables with foreign keys). A column added to one is added to the other, to `doc/data-model.md` and, if it travels, to `schema/submission.schema.json`. The agent's database account cannot run DDL: Philippe runs `OC-tables.sql`.
 - Never commit video files, frames, SQLite databases or secrets (`.gitignore`).
 - `.sql` files that must run on the VPS follow the ecosystem rule: committed and pushed first, then `~/docker/tools/runsqlvaugouindb.sh` (see `%USERPROFILE%/Code/tools/AGENTS.md`).
 - Documentation in English (public repository).

@@ -30,7 +30,8 @@ def vote(readings: list[dict], frame_height: int) -> list[dict]:
     lines = []
     for g in groups:
         text, n = Counter(norm(x["text"]) for x in g["r"]).most_common(1)[0]
-        lines.append(dict(y=round(g["y"]), x0=g["x0"], x1=g["x1"], text=text, agree=n, seen=len(g["r"]),
+        h = sorted(x["y1"] - x["y0"] for x in g["r"])[len(g["r"]) // 2]
+        lines.append(dict(y=round(g["y"]), x0=g["x0"], x1=g["x1"], h=h, text=text, agree=n, seen=len(g["r"]),
                           frames=sorted({x["t"] for x in g["r"]})))
 
     def covered(l):
@@ -47,5 +48,35 @@ def vote(readings: list[dict], frame_height: int) -> list[dict]:
         return any(m is not l and m["seen"] > 1 and abs(m["y"] - l["y"]) <= Y_TOL
                    and min(m["x1"], l["x1"]) - max(m["x0"], l["x0"]) > 0 for m in lines)
     lines = [l for l in lines if not fragment(l)]
-    lines.sort(key=lambda l: (l["y"] // 20, l["x0"]))
-    return lines
+    return in_rows(lines)
+
+
+def in_rows(lines: list[dict]) -> list[dict]:
+    """Lines in reading order: rows of lines within Y_TOL of the row's first line, each row left to right."""
+    rows: list[list[dict]] = []
+    for l in sorted(lines, key=lambda l: l["y"]):
+        if rows and abs(l["y"] - rows[-1][0]["y"]) <= Y_TOL: rows[-1].append(l)
+        else: rows.append([l])
+    return [l for r in rows for l in sorted(r, key=lambda l: l["x0"])]
+
+
+def join_spaced(lines: list[dict]) -> list[dict]:
+    """Chinese and Japanese: rejoin a name the typesetting spaced out ("柊   瑠美", "大泉  洋", "ハ  ク").
+
+    The gap alone cannot tell a spaced name from two names in adjacent columns, so only short pieces are
+    joined: one of them at most 2 characters, together at most 4, gap under 2.5 character heights."""
+    out: list[dict] = []
+    for l in in_rows(lines):
+        a = out[-1] if out else None
+        if a and abs(a["y"] - l["y"]) <= Y_TOL:
+            ta, tb = a["text"].replace(" ", ""), l["text"].replace(" ", "")
+            if tb in ta and l["x0"] >= a["x0"] - a["h"] and l["x1"] <= a["x1"] + a["h"]:   # a second reading of a piece already there
+                continue
+        if a and abs(a["y"] - l["y"]) <= Y_TOL and -a["h"] <= l["x0"] - a["x1"] < 2.5 * max(a["h"], l["h"]):
+            if min(len(ta), len(tb)) <= 2 and len(ta) + len(tb) <= 4:
+                out[-1] = dict(a, x1=max(a["x1"], l["x1"]), text=f"{a['text']} {l['text']}",
+                               agree=min(a["agree"], l["agree"]), seen=min(a["seen"], l["seen"]),
+                               frames=sorted(set(a["frames"]) | set(l["frames"])))
+                continue
+        out.append(l)
+    return out

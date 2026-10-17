@@ -1,12 +1,13 @@
 [project]
 name = "opencredits"
-version = "0.1.0"
+version = "0.2.0"
 description = "open-credits client prototype: read the rolling end credits of a video file with OCR"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "numpy>=2",
+    "opencc>=1.4.2",
     "pillow>=11",
 ]
 

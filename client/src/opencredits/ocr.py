@@ -3,15 +3,18 @@ import time
 from pathlib import Path
 
 ENGINES = ("paddle", "tesseract")
+# PP-OCRv5 recognition model per credits language: the base model reads Chinese, Japanese and English
+PADDLE_REC = {"en": "en_PP-OCRv5_mobile_rec", "ja": "PP-OCRv5_mobile_rec", "zh": "PP-OCRv5_mobile_rec"}
+TESSERACT_LANG = {"en": "eng", "ja": "jpn", "zh": "chi_sim"}
 TESSERACT_EXE = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 THRESHOLD = 110    # Tesseract input: brighter than this becomes black ink on white
 
 
-def reader(engine: str):
+def reader(engine: str, lang: str = "en"):
     """A function path -> [dict(x0, y0, x1, y1, text, conf)]."""
     if engine == "paddle":
         from paddleocr import PaddleOCR
-        o = PaddleOCR(text_detection_model_name="PP-OCRv5_mobile_det", text_recognition_model_name="en_PP-OCRv5_mobile_rec",
+        o = PaddleOCR(text_detection_model_name="PP-OCRv5_mobile_det", text_recognition_model_name=PADDLE_REC[lang],
                       use_doc_orientation_classify=False, use_doc_unwarping=False, use_textline_orientation=False,
                       enable_mkldnn=True)
 
@@ -27,7 +30,7 @@ def reader(engine: str):
 
         def read(path: Path) -> list[dict]:
             im = Image.open(path).convert("L").point(lambda v: 0 if v > THRESHOLD else 255)
-            d = pytesseract.image_to_data(im, config="--psm 11", output_type=pytesseract.Output.DICT)
+            d = pytesseract.image_to_data(im, lang=TESSERACT_LANG[lang], config="--psm 11", output_type=pytesseract.Output.DICT)
             lines: dict[tuple, list[int]] = {}
             for i, w in enumerate(d["text"]):
                 if w.strip() and float(d["conf"][i]) >= 0:
@@ -40,9 +43,9 @@ def reader(engine: str):
     raise ValueError(f"unknown engine {engine}")
 
 
-def read_roll(engine: str, frames: dict[int, Path], offs: dict[int, int], log=print) -> tuple[list[dict], float]:
+def read_roll(engine: str, lang: str, frames: dict[int, Path], offs: dict[int, int], log=print) -> tuple[list[dict], float]:
     """Read every roll frame; each reading gets its frame time t and its page height y (centre of the box)."""
-    read = reader(engine); out = []; t0 = time.time()
+    read = reader(engine, lang); out = []; t0 = time.time()
     for i, t in enumerate(sorted(offs)):
         for r in read(frames[t]):
             out.append(dict(r, t=t, y=offs[t] + (r["y0"] + r["y1"]) / 2))

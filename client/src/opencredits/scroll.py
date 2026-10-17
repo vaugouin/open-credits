@@ -2,30 +2,38 @@
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter
 
-INK = 128          # a pixel brighter than this is text (white credits on black)
+INK = 150          # text pixels are at least this bright (white credits)
+BLUR = 12          # px; text stands out from the frame blurred at this radius, a painted background does not
+CONTRAST = 36      # how much brighter than its blurred neighbourhood a text pixel is
+MIN_INK = 50       # text pixels in a frame below which it is blank
 MAX_SHIFT = 400    # px per frame searched upward
-STEADY = 0.98      # correlation of row profiles above which the shift is trusted
+STEADY = 0.85      # correlation of row profiles above which the shift is trusted
 MIN_SHIFT = 20     # px; below this the picture is not scrolling
 
 
-def gray(path: Path) -> np.ndarray:
-    return np.asarray(Image.open(path).convert("L"), dtype=np.float32)
+def text_mask(path: Path) -> np.ndarray:
+    """Bright pixels that stand out from their neighbourhood: the credits, not the picture behind them."""
+    im = Image.open(path).convert("L")
+    a = np.asarray(im, dtype=np.float32); b = np.asarray(im.filter(ImageFilter.BoxBlur(BLUR)), dtype=np.float32)
+    return (a > INK) & (a - b > CONTRAST)
 
 
 def shifts(frames: dict[int, Path]) -> list[tuple[int, float, int, float]]:
     """(t, ink %, shift px from the previous frame, correlation) for each frame after the first."""
     out, prev = [], None
     for t in sorted(frames):
-        a = gray(frames[t]); prof = (a > INK).sum(1).astype(np.float32)
-        if prev is not None:
+        m = text_mask(frames[t]); prof = m.sum(1).astype(np.float32)
+        if prev is not None and prof.sum() >= MIN_INK and prev.sum() >= MIN_INK:
             best, bs = 0, 0.0
             for s in range(min(MAX_SHIFT, len(prof) - 1)):
                 p0, p1 = prev[s:], prof[:len(prof) - s]
                 c = float(np.dot(p0, p1) / (np.linalg.norm(p0) * np.linalg.norm(p1) + 1e-6))
                 if c > bs: bs, best = c, s
-            out.append((t, round(float((a > INK).mean()) * 100, 2), best, round(bs, 3)))
+            out.append((t, round(float(m.mean()) * 100, 2), best, round(bs, 3)))
+        elif prev is not None:
+            out.append((t, round(float(m.mean()) * 100, 2), 0, 0.0))
         prev = prof
     return out
 

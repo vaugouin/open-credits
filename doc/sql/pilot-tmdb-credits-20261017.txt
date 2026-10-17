@@ -1,0 +1,121 @@
+-- pilot-tmdb-credits.sql
+-- run on vaugouindb (container damp-vaugouin-com-mariadb-1) at 2026-10-17 19:09:18
+--
++-------------+-------------------+---------+
+| CREDIT_TYPE | CREW_DEPARTMENT   | credits |
++-------------+-------------------+---------+
+| cast        |                   |       9 |
+| crew        | Crew              |      13 |
+| crew        | Art               |      13 |
+| crew        | Production        |      13 |
+| crew        | Sound             |      11 |
+| crew        | Visual Effects    |      10 |
+| crew        | Directing         |       7 |
+| crew        | Editing           |       7 |
+| crew        | Costume & Make-Up |       6 |
+| crew        | Camera            |       5 |
+| crew        | Writing           |       3 |
+| crew        | Lighting          |       1 |
++-------------+-------------------+---------+
++-------------+---------------+-----------+----------------------+-----------+-------------------+------------------------------+----------------+
+| CREDIT_TYPE | DISPLAY_ORDER | ID_PERSON | NAME                 | ID_IMDB   | CREW_DEPARTMENT   | CREW_JOB                     | CAST_CHARACTER |
++-------------+---------------+-----------+----------------------+-----------+-------------------+------------------------------+----------------+
+| cast        |             1 |      4139 | Tom Skerritt         | nm0000643 |                   |                              | Dallas         |
+| cast        |             2 |     10205 | Sigourney Weaver     | nm0000244 |                   |                              | Ripley         |
+| cast        |             3 |      5047 | Veronica Cartwright  | nm0001021 |                   |                              | Lambert        |
+| cast        |             4 |      5048 | Harry Dean Stanton   | nm0001765 |                   |                              | Brett          |
+| cast        |             5 |      5049 | John Hurt            | nm0000457 |                   |                              | Kane           |
+| cast        |             6 |        65 | Ian Holm             | nm0000453 |                   |                              | Ash            |
+| cast        |             7 |      5050 | Yaphet Kotto         | nm0001433 |                   |                              | Parker         |
+| cast        |             8 |      5051 | Bolaji Badejo        | nm0045993 |                   |                              | Alien          |
+| cast        |             9 |      5052 | Helen Horton         | nm0395600 |                   |                              | Mother (voice) |
+| crew        |             2 |      5058 | Roger Christian      | nm0002337 | Art               | Art Direction                |                |
+| crew        |            14 |      5059 | Leslie Dilley        | nm0226896 | Art               | Art Direction                |                |
+| crew        |            22 |   1378834 | Jonathan Amberston   | nm0024290 | Art               | Assistant Art Director       |                |
+| crew        |            36 |      4710 | Benjamín Fernández   | nm0273414 | Art               | Assistant Art Director       |                |
+| crew        |            34 |   2691322 | Chris Foss           |           | Art               | Concept Artist               |                |
+| crew        |            37 |     25195 | Ron Cobb             | nm0167803 | Art               | Concept Artist               |                |
+| crew        |            85 |     62460 | Jean Giraud          | nm0320786 | Art               | Concept Artist               |                |
+| crew        |            35 |   1342591 | Bill Welch           | nm0919513 | Art               | Construction Manager         |                |
+| crew        |            86 |   2647455 | John Davey           |           | Art               | Painter                      |                |
+| crew        |             1 |      4616 | Michael Seymour      | nm0786854 | Art               | Production Design            |                |
+| crew        |            67 |   1591553 | Julian Caldow        |           | Art               | Production Illustrator       |                |
+| crew        |            23 |   1378835 | Dave Jordan          | nm0429904 | Art               | Property Master              |                |
+| crew        |             6 |    121680 | Ian Whittaker        | nm0926434 | Art               | Set Decoration               |                |
+| crew        |            13 |      5055 | Derek Vanlint        | nm0889169 | Camera            | Director of Photography      |                |
+| crew        |            88 |      7783 | Adrian Biddle        | nm0000939 | Camera            | Focus Puller                 |                |
+| crew        |            89 |   3020418 | Colin Davidson       |           | Camera            | Focus Puller                 |                |
+| crew        |            48 |   2691335 | Jimmy Walters        |           | Camera            | Key Grip                     |                |
+| crew        |            19 |   1378839 | Bob Penn             | nm0671962 | Camera            | Still Photographer           |                |
+| crew        |            25 |   1323295 | Graham Churchyard    | nm0161495 | Costume & Make-Up | Costume Assistant            |                |
+| crew        |            10 |      5061 | John Mollo           | nm0597087 | Costume & Make-Up | Costume Design               |                |
+| crew        |            39 |   1411066 | Sarah Monzani        | nm0600389 | Costume & Make-Up | Hairdresser                  |                |
+| crew        |            41 |   1626421 | Pat Hay              |           | Costume & Make-Up | Makeup Artist                |                |
+| crew        |            40 |   1864146 | Tommie Manderson     | nm0541781 | Costume & Make-Up | Makeup Supervisor            |                |
+| crew        |            58 |     29061 | Tiny Nicholls        | nm0629471 | Costume & Make-Up | Wardrobe Supervisor          |                |
+| crew        |            61 |   1899516 | George Gunning       |           | Crew              | Carpenter                    |                |
+| crew        |            28 |      5045 | Dan O'Bannon         | nm0639321 | Crew              | Other                        |                |
+| crew        |             4 |      9402 | Brian Johnson        | nm0424644 | Crew              | Special Effects              |                |
+| crew        |            31 |   2379068 | Bernard Lodge        | nm0517082 | Crew              | Special Effects              |                |
+| crew        |            38 |   1629006 | David H. Watkins     |           | Crew              | Special Effects Technician   |                |
+| crew        |            42 |   2691357 | Neil Swan            |           | Crew              | Special Effects Technician   |                |
+| crew        |            43 |   2691353 | Roger Nichols        | nm0629719 | Crew              | Special Effects Technician   |                |
+| crew        |            46 |   2691350 | Phil Knowles         |           | Crew              | Special Effects Technician   |                |
+| crew        |            47 |     15910 | Dennis Lowe          | nm0522806 | Crew              | Special Effects Technician   |                |
+| crew        |            49 |   2691349 | Guy Hudson           |           | Crew              | Special Effects Technician   |                |
+| crew        |            21 |   1378838 | Roy Scammell         | nm0768882 | Crew              | Stunt Coordinator            |                |
+| crew        |            57 |   1077325 | Eddie Powell         | nm0694101 | Crew              | Stunts                       |                |
+| crew        |            62 |   2835458 | Brian Doyle          |           | Crew              | Unit Publicist               |                |
+| crew        |            60 |   2835414 | Raymond Becket       |           | Directing         | Assistant Director           |                |
+| crew        |            79 |   1697623 | Steve Harding        |           | Directing         | Assistant Director           |                |
+| crew        |            83 |   5728043 | Bob Jordan           | nm0429851 | Directing         | Assistant Director Trainee   |                |
+| crew        |            52 |    589985 | Kay Fenton           | nm0003628 | Directing         | Continuity                   |                |
+| crew        |            16 |       578 | Ridley Scott         | nm0000631 | Directing         | Director                     |                |
+| crew        |            50 |   2691339 | Paul Ibbetson        |           | Directing         | First Assistant Director     |                |
+| crew        |            66 |   2191944 | Julian Wall          | nm0908441 | Directing         | Second Assistant Director    |                |
+| crew        |            75 |   1893273 | Peter Culverwell     | nm0191756 | Editing           | Assistant Editor             |                |
+| crew        |            76 |   3630467 | Bridget Reiss        |           | Editing           | Assistant Editor             |                |
+| crew        |            77 |     75098 | Peter Baldock        | nm0049792 | Editing           | Assistant Editor             |                |
+| crew        |            78 |   5728036 | Maureen Lyndon       |           | Editing           | Assistant Editor             |                |
+| crew        |             7 |      5056 | Terry Rawlings       | nm0712625 | Editing           | Editor                       |                |
+| crew        |             8 |      5057 | Peter Weatherley     | nm0915753 | Editing           | Editor                       |                |
+| crew        |            74 |     21272 | Les Healey           | nm0372264 | Editing           | First Assistant Editor       |                |
+| crew        |            45 |   1673532 | Ray Evans            |           | Lighting          | Gaffer                       |                |
+| crew        |            18 |      5054 | Ivor Powell          | nm0694138 | Production        | Associate Producer           |                |
+| crew        |             5 |     23349 | Mary Goldberg        | nm0325263 | Production        | Casting                      |                |
+| crew        |            15 |       668 | Mary Selway          | nm0783620 | Production        | Casting                      |                |
+| crew        |             3 |      5046 | Ronald Shusett       | nm0795953 | Production        | Executive Producer           |                |
+| crew        |            11 |      1723 | Walter Hill          | nm0001353 | Production        | Producer                     |                |
+| crew        |            12 |      5053 | Gordon Carroll       | nm0140826 | Production        | Producer                     |                |
+| crew        |            17 |       915 | David Giler          | nm0318429 | Production        | Producer                     |                |
+| crew        |            81 |   5728041 | Alice Harmon         |           | Production        | Producer's Assistant         |                |
+| crew        |            82 |   5728042 | Lori Covel           |           | Production        | Producer's Assistant         |                |
+| crew        |            65 |   2835461 | Bill Finch           |           | Production        | Production Accountant        |                |
+| crew        |            80 |   2180075 | Valerie Craig        |           | Production        | Production Assistant         |                |
+| crew        |            84 |   1069525 | Mark Haggard         | nm0353587 | Production        | Production Executive         |                |
+| crew        |            44 |    980086 | Garth Thomas         | nm0858850 | Production        | Production Manager           |                |
+| crew        |            63 |     11441 | Lionel Newman        | nm0006213 | Sound             | Conductor                    |                |
+| crew        |            24 |   1378836 | Bryan Tilling        | nm0863371 | Sound             | Dialogue Editor              |                |
+| crew        |            68 |   1602729 | William Parnell      |           | Sound             | Dialogue Editor              |                |
+| crew        |            20 |   1378837 | Max Bell             | nm0068397 | Sound             | Dolby Consultant             |                |
+| crew        |            64 |      5062 | Robert Hathaway      | nm0368899 | Sound             | Music Editor                 |                |
+| crew        |             9 |      1760 | Jerry Goldsmith      | nm0000025 | Sound             | Original Music Composer      |                |
+| crew        |            51 |   1298608 | Derrick Leather      | nm0495309 | Sound             | Production Sound Mixer       |                |
+| crew        |            32 |       670 | Ben Burtt            | nm0123785 | Sound             | Sound Designer               |                |
+| crew        |            54 |      9854 | Jim Shields          | nm0793203 | Sound             | Sound Editor                 |                |
+| crew        |            73 |    589952 | Ray Merrin           | nm0581370 | Sound             | Sound Re-Recording Assistant |                |
+| crew        |            55 |     11384 | Bill Rowe            | nm0746477 | Sound             | Sound Re-Recording Mixer     |                |
+| crew        |            33 |      9136 | H. R. Giger          | nm0317592 | Visual Effects    | Creature Design              |                |
+| crew        |            87 |   1403317 | Ray Caple            | nm0135251 | Visual Effects    | Matte Painter                |                |
+| crew        |            56 |   1406920 | Eddie Butler         | nm0124903 | Visual Effects    | Modeling                     |                |
+| crew        |            59 |   2835423 | Patti Rodgers        |           | Visual Effects    | Modeling                     |                |
+| crew        |            30 |   1394780 | Peter Voysey         | nm0903926 | Visual Effects    | Modelling Supervisor         |                |
+| crew        |             4 |      9402 | Brian Johnson        | nm0424644 | Visual Effects    | Special Effects Supervisor   |                |
+| crew        |            27 |   1346943 | Nick Allder          | nm0020158 | Visual Effects    | Special Effects Supervisor   |                |
+| crew        |            69 |   1445972 | Joss Williams        | nm0930998 | Visual Effects    | Special Effects Supervisor   |                |
+| crew        |            70 |     31912 | Andy Williams        | nm0930024 | Visual Effects    | Special Effects Supervisor   |                |
+| crew        |            53 |   1993083 | Dennis Ayling        | nm0043861 | Visual Effects    | VFX Director of Photography  |                |
+| crew        |            28 |      5045 | Dan O'Bannon         | nm0639321 | Writing           | Screenplay                   |                |
+| crew        |             3 |      5046 | Ronald Shusett       | nm0795953 | Writing           | Story                        |                |
+| crew        |            28 |      5045 | Dan O'Bannon         | nm0639321 | Writing           | Story                        |                |
++-------------+---------------+-----------+----------------------+-----------+-------------------+------------------------------+----------------+

@@ -6,7 +6,7 @@ Every film and every episode ends (and often begins) with a list of the people, 
 
 ## Status
 
-Pilot stage (October 2026). Nothing to install yet. The current work is the data model, [`doc/data-model.md`](doc/data-model.md), the comparison of technologies, [`doc/technology-choices.md`](doc/technology-choices.md), the submission format, [`doc/submission-format.md`](doc/submission-format.md), the table definitions, [`doc/sql/`](doc/sql/), and a pilot on twelve deliberately different titles: a CGI blockbuster, a crowdfunded film, Saul Bass titles, graphic credits with dubbing credits, a French film, a TV episode, a DVD rip, Japanese, bilingual Hong Kong and right-to-left Persian credits, a film with several copies and editions, and a film split into two files.
+Pilot stage (October 2026). A first client prototype, [`client/`](client/), reads the rolling end credits of a video file (frames, scroll measurement, OCR with PaddleOCR, vote across frames, check against TMDb). The rest of the current work is the data model, [`doc/data-model.md`](doc/data-model.md), the comparison of technologies, [`doc/technology-choices.md`](doc/technology-choices.md), the submission format, [`doc/submission-format.md`](doc/submission-format.md), the table definitions, [`doc/sql/`](doc/sql/), and a pilot on twelve deliberately different titles: a CGI blockbuster, a crowdfunded film, Saul Bass titles, graphic credits with dubbing credits, a French film, a TV episode, a DVD rip, Japanese, bilingual Hong Kong and right-to-left Persian credits, a film with several copies and editions, and a film split into two files.
 
 ## Principles
 

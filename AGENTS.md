@@ -27,6 +27,10 @@ Read the charter before changing anything structural. Key decisions an agent mus
 
 The client works in a local SQLite file and exports one JSON bundle per submission; an importer loads the bundles into the `T_WC_OC_*` tables (see `doc/technology-choices.md`, sections 4 and 6). `sqlite-plex-to-tmdb` (sibling repository) maps Plex files to TMDb IDs. Plex data in MariaDB: `T_WC_TMDB_PLEX_*`. Keep the `T_WC_OC_*` tables free of foreign keys to other `T_WC_*` tables, and the code that reads non-OC tables (layer 4 comparisons, ROLE seeding) in one module.
 
+## Client prototype
+
+`client/` holds the Python package `opencredits` (its own `pyproject.toml` and `AGENTS.md`): frames, scroll, virtual page, OCR, vote and TMDb check, run by `uv run opencredits run`. Read `client/AGENTS.md` before changing it.
+
 ## Conventions
 
 - Python with `uv`. LF line endings (`.gitattributes`).

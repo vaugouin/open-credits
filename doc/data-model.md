@@ -22,7 +22,7 @@ Examples below are illustrative. The pilot will replace them with lines read fro
 
 - Every row of the master database has a **UUID** (version 7, time-ordered) as its primary key: copies and dumps can be compared and forked without key collisions (charter, decision 24).
 - External identifiers are **attributes, never keys**: TMDb ids (`int`), IMDb ids (`tt…`, `nm…`, `co…`), Wikidata Q-ids. A credit stays valid when an external id changes or disappears.
-- Physical table names are an open question (see the end): the names below are logical.
+- Physical table names: the names below are logical; in the master each table is `T_WC_OC_<NAME>` (decision 1 at the end).
 
 ---
 
@@ -297,12 +297,17 @@ Corrections made in a view are written as edits (with HISTORY), never by changin
 
 ---
 
-## Diagram
+## Diagrams
+
+Four diagrams: the overview of every table and its links, then the columns layer by layer. Logical names; in the master each table is `T_WC_OC_<NAME>` (decision 1). `PK` primary key, `FK` foreign key, `UK` unique identity of a shared row.
+
+### Overview
 
 ```mermaid
 erDiagram
     WORK ||--o{ EDITION : "cut as"
     EDITION ||--o{ COPY : "encoded as"
+    WORK ||--o{ COPY : "copy of"
     COPY ||--|{ PART : "files"
     COPY ||--o{ SUBMISSION : "processed in"
     CONTRIBUTOR ||--o{ SUBMISSION : "sends"
@@ -311,16 +316,317 @@ erDiagram
     SEGMENT ||--o{ FRAME : "sampled into"
     FRAME ||--o{ TEXT_BOX : "OCR"
     SEGMENT ||--o{ TEXT_LINE : "rebuilt on virtual page"
+    TEXT_LINE }o--|{ FRAME : "frame_ids"
     SEGMENT ||--o{ BLOCK : "parsed into"
     BLOCK ||--o{ CREDIT : "lists"
-    CREDIT }o--|| ROLE : "role_id"
-    CREDIT }o--o| ENTITY : "entity_id (person, company, place, song)"
-    ROLE ||--o{ ROLE_ALIAS : "matched by"
+    BLOCK }o--o| COMPANY : "vendor_entity_id"
+    CREDIT }o--o| ROLE : "role_id"
     CREDIT }o--o{ ROLE_MODIFIER : "role_modifiers"
+    CREDIT }o--o| PERSON : "entity_id"
+    CREDIT }o--o| COMPANY : "entity_id"
+    CREDIT }o--o| PLACE : "entity_id"
+    CREDIT }o--o| SONG : "entity_id or song"
+    COMPANY }o--o| COMPANY_CLASS : "company_class"
+    ROLE ||--o{ ROLE_ALIAS : "matched by"
+    ROLE |o--o{ ROLE : "parent_role_id"
     WORK ||--o{ CONSOLIDATED_CREDIT : "credits"
     CONSOLIDATED_CREDIT }o--|{ CREDIT : "computed from"
     CONSOLIDATED_CREDIT ||--o{ HISTORY : "edits"
+    CONSOLIDATED_CREDIT ||--o{ REPORT : "reported"
+    CONTRIBUTOR ||--o{ HISTORY : "edits"
+    CONTRIBUTOR ||--o{ REPORT : "files"
 ```
+
+### Layer 0: work, edition, copy, part, submission
+
+```mermaid
+erDiagram
+    WORK ||--o{ EDITION : "cut as"
+    EDITION ||--o{ COPY : "encoded as"
+    COPY ||--|{ PART : "files"
+    COPY ||--o{ SUBMISSION : "processed in"
+    CONTRIBUTOR ||--o{ SUBMISSION : "sends"
+
+    WORK {
+        uuid id PK
+        string kind "movie or episode"
+        int tmdb_movie_id
+        int tmdb_serie_id
+        int season_number
+        int episode_number
+        string imdb_id
+        string wikidata_id
+        string title
+        int year
+    }
+    EDITION {
+        uuid id PK
+        uuid work_id FK
+        string label "theatrical, directors_cut, extended, tv_cut, unrated, other"
+        int nominal_runtime_ms
+        string status "proposed or confirmed"
+    }
+    COPY {
+        uuid id PK
+        uuid work_id FK
+        uuid edition_id FK "empty until grouped"
+        string fingerprint UK "sha256 of the parts"
+        int part_count
+        int duration_ms
+        int width
+        int height
+        float fps
+        string edition_hint "Plex edition tag"
+        string version_language
+        string source "bluray, remux, dvd, web, tv"
+    }
+    PART {
+        uuid id PK
+        uuid copy_id FK
+        int part_index
+        string opensubtitles_hash UK "with file_size"
+        int file_size UK
+        int duration_ms
+        int offset_ms "start in the copy"
+    }
+    SUBMISSION {
+        uuid id PK
+        uuid contributor_id FK
+        uuid copy_id FK
+        string client_version
+        string ocr_engine
+        string ocr_engine_version
+        json parameters
+        string vocabulary_version
+        datetime submitted_at
+        string status "received, parsed, published, rolled_back"
+        string licence "CC0-1.0"
+    }
+    CONTRIBUTOR {
+        uuid id PK
+        string username
+        int reputation
+        string role "contributor or moderator"
+        string tmdb_username
+        string wikidata_username
+    }
+```
+
+### Layers 1 and 2: segments, frames, OCR
+
+```mermaid
+erDiagram
+    SUBMISSION ||--o{ SEGMENT : "finds"
+    PART ||--o{ SEGMENT : "holds"
+    SEGMENT ||--o{ FRAME : "sampled into"
+    FRAME ||--o{ TEXT_BOX : "OCR"
+    SEGMENT ||--o{ TEXT_LINE : "rebuilt on virtual page"
+    TEXT_LINE }o--|{ FRAME : "frame_ids"
+
+    SEGMENT {
+        uuid id PK
+        uuid submission_id FK
+        uuid part_id FK
+        string kind "opening_titles, closing_credits, card..."
+        int start_ms "within the part"
+        int end_ms
+        string detected_by "plex_marker, blackdetect, scene_change, manual"
+        string layout "rolling, cards, graphic, crawl, mixed"
+        float scroll_px_per_s
+    }
+    FRAME {
+        uuid id PK
+        uuid segment_id FK
+        int timecode_ms
+        string phash "perceptual hash"
+        int page_offset_px
+        bool has_text
+        string evidence_path "optional WebP"
+    }
+    TEXT_BOX {
+        uuid id PK
+        uuid frame_id FK
+        int x
+        int y
+        int w
+        int h
+        string text "as read"
+        float confidence
+        int font_height_px
+        bool is_upper_case
+        bool is_bold
+    }
+    TEXT_LINE {
+        uuid id PK
+        uuid segment_id FK
+        int y_page "on the virtual page"
+        int x "gives the column"
+        int w
+        int h
+        string text "voted reading"
+        int readings
+        int agreeing
+        float confidence
+        json frame_ids "evidence chain"
+        int first_ms "Wikidata time index"
+        int last_ms
+    }
+```
+
+### Layer 3: blocks, credits, entities
+
+```mermaid
+erDiagram
+    SEGMENT ||--o{ BLOCK : "parsed into"
+    BLOCK ||--o{ CREDIT : "lists"
+    BLOCK }o--|{ TEXT_LINE : "line_ids"
+    CREDIT }o--|{ TEXT_LINE : "line_ids"
+    BLOCK }o--o| COMPANY : "vendor"
+    CREDIT }o--o| PERSON : "entity_id"
+    CREDIT }o--o| COMPANY : "entity_id"
+    CREDIT }o--o| PLACE : "entity_id"
+    CREDIT }o--o| SONG : "entity_id or song"
+    CREDIT }o--o| ROLE : "role_id"
+    CREDIT }o--o{ ROLE_MODIFIER : "role_modifiers"
+    COMPANY }o--o| COMPANY_CLASS : "class"
+
+    BLOCK {
+        uuid id PK
+        uuid segment_id FK
+        int display_order
+        string heading_raw "as on screen"
+        string block_type "cast, crew, unit, songs, thanks, dubbing..."
+        string unit "main, second_unit, or a place"
+        uuid vendor_entity_id FK
+        string version_language "dubbing blocks"
+        json line_ids
+    }
+    CREDIT {
+        uuid id PK
+        uuid block_id FK
+        int display_order "P1545"
+        string entity_kind "person, company, place, song, work, other"
+        string name_raw "P1932, as credited"
+        uuid entity_id FK "empty until resolved"
+        string role_raw "P13187, as credited"
+        uuid role_id FK "base job"
+        json role_modifiers
+        uuid role_target_entity_id FK "assistant to, double for"
+        uuid song_id FK
+        string character_raw "P4633"
+        uuid character_id
+        string language "P407, dubbing"
+        string qualifier_raw "as, with the participation of"
+        json line_ids
+        float parse_confidence
+        bool is_private_individual
+    }
+    PERSON {
+        uuid id PK
+        string display_name
+        bool is_private_individual
+        int tmdb_person_id
+        string wikidata_id
+        string imdb_nm
+    }
+    COMPANY {
+        uuid id PK
+        string display_name
+        string company_class FK
+        string country
+        int tmdb_company_id
+        string wikidata_id
+        string imdb_co
+    }
+    PLACE {
+        uuid id PK
+        string display_name
+        string place_type "country, region, city, structure, studio_facility, nature"
+        string wikidata_id
+    }
+    SONG {
+        uuid id PK
+        string title_raw
+        string wikidata_id
+    }
+```
+
+### Layers 4 and 5: consolidated credits and vocabulary
+
+```mermaid
+erDiagram
+    WORK ||--o{ CONSOLIDATED_CREDIT : "credits"
+    CONSOLIDATED_CREDIT }o--|{ CREDIT : "source_credit_ids"
+    CONSOLIDATED_CREDIT ||--o{ HISTORY : "edits"
+    CONSOLIDATED_CREDIT ||--o{ REPORT : "reported"
+    CONSOLIDATED_CREDIT }o--o| ROLE : "role_id"
+    ROLE ||--o{ ROLE_ALIAS : "matched by"
+    ROLE |o--o{ ROLE : "parent_role_id"
+
+    CONSOLIDATED_CREDIT {
+        uuid id PK
+        uuid work_id FK
+        uuid role_id FK
+        uuid entity_id FK
+        string name_display
+        string character_display
+        int display_order
+        int support "submissions and copies"
+        float score "weighted by reputation"
+        string status "proposed, confirmed, locked, rejected"
+        json source_credit_ids "evidence chain"
+    }
+    HISTORY {
+        uuid id PK
+        uuid consolidated_credit_id FK
+        uuid contributor_id FK
+        datetime edited_at
+        json before
+        json after
+        string reason
+    }
+    REPORT {
+        uuid id PK
+        uuid work_id FK
+        uuid consolidated_credit_id FK
+        uuid contributor_id FK
+        string reason
+        bool is_public
+        string status
+    }
+    ROLE {
+        uuid id PK
+        string code UK "directing.first_assistant_director"
+        string label_en
+        string applies_to "person, company, place, song, work"
+        uuid parent_role_id FK
+        string tmdb_department
+        string tmdb_job
+        string wikidata_property "dedicated or P3092"
+        string wikidata_job_item "P3831 value"
+        string status "active or proposed"
+    }
+    ROLE_MODIFIER {
+        uuid id PK
+        string code UK "key, second, assistant, additional..."
+        string kind "rank, unit or scope"
+        string label_en
+    }
+    ROLE_ALIAS {
+        uuid id PK
+        uuid role_id FK
+        string wording "as seen on screen"
+        string language
+        json role_modifiers
+    }
+    COMPANY_CLASS {
+        string code PK
+        string label_en
+        string wikidata_id "empty when Wikidata lacks the class"
+    }
+```
+
+Columns the model text leaves unnamed are filled with the obvious choice and should be read as proposals: CONTRIBUTOR's `username`, HISTORY's `edited_at`, REPORT's links, ROLE_MODIFIER's `kind`, ROLE_ALIAS's `wording` and `language`, CREDIT's `song_id` and `character_id`, SUBMISSION's `vocabulary_version` (from the submission format).
 
 ---
 

@@ -1,19 +1,22 @@
 """open-credits review: hand-check of sampled OCR lines (charter, decision 27 c), each verdict saved on click.
 
 Samples are folders copied from the client (`opencredits review`) under SHARED: <sample>/sample.json and
-<sample>/crops/NN.png. On listing, new samples are loaded into T_WC_OC_REVIEW, and a verdicts.json left in a
-folder by the offline page fills the verdicts not yet given."""
+<sample>/crops/NN.png, sent by the client as one zip (`opencredits review --upload`). On upload and on listing,
+new samples are loaded into T_WC_OC_REVIEW, and a verdicts.json from the offline page fills the verdicts not yet given."""
+import io
 import json
 import os
 import re
 import secrets
+import shutil
 import time
 import uuid
 from datetime import date, datetime
 from pathlib import Path
+from zipfile import BadZipFile, ZipFile
 
 import pymysql
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -22,6 +25,9 @@ SHARED = Path(os.environ.get("REVIEW_SHARED", "/shared"))
 VERDICTS = ("exact", "minor", "wrong", "noise")
 NAME = re.compile(r"^[a-z0-9][a-z0-9-]{0,99}$")
 CROP = re.compile(r"^\d{2,3}\.png$")
+MEMBER = re.compile(r"^(sample\.json|verdicts\.json|crops/\d{2,3}\.png)$")   # the only files a sample zip may hold
+MAX_ZIP = 30 * 1024 * 1024
+MAX_FILES = 300
 
 app = FastAPI(title="open-credits review", version=VERSION)
 
@@ -106,6 +112,38 @@ def judge(name: str, item: int, v: Verdict):
             WHERE SAMPLE = %s AND ITEM = %s""", (v.verdict, (v.note or "").strip()[:500] or None, datetime.now(), name, item))
     if not n: raise HTTPException(404, "no such line")
     return dict(ok=True)
+
+
+@app.post("/api/samples/{name}")
+async def upload(name: str, request: Request, replace: bool = False):
+    """A sample zip from the client. An existing sample is refused unless replace, which also drops its verdicts."""
+    if not NAME.match(name): raise HTTPException(422, "sample name: lower case letters, digits and hyphens")
+    body = await request.body()
+    if len(body) > MAX_ZIP: raise HTTPException(413, "zip too large")
+    try:
+        z = ZipFile(io.BytesIO(body))
+        members = [m for m in z.infolist() if not m.is_dir()]
+    except BadZipFile:
+        raise HTTPException(422, "not a zip")
+    bad = [m.filename for m in members if not MEMBER.match(m.filename)]
+    if bad or not any(m.filename == "sample.json" for m in members) or len(members) > MAX_FILES:
+        raise HTTPException(422, f"unexpected content: {bad[:5]}" if bad else "sample.json missing or too many files")
+    if sum(m.file_size for m in members) > 4 * MAX_ZIP: raise HTTPException(413, "zip expands too much")
+    try:
+        s = json.loads(z.read("sample.json").decode("utf-8")); assert s["tag"] and s["items"]
+    except Exception:
+        raise HTTPException(422, "sample.json unreadable")
+    target = SHARED / name
+    if target.exists() and not replace: raise HTTPException(409, "sample already there: upload with replace to redo it (its verdicts are dropped)")
+    tmp = SHARED / f".upload-{name}"
+    shutil.rmtree(tmp, ignore_errors=True); (tmp / "crops").mkdir(parents=True)
+    for m in members: (tmp / m.filename).write_bytes(z.read(m))
+    if target.exists():
+        shutil.rmtree(target)
+        with db() as c, c.cursor() as cur: cur.execute("DELETE FROM T_WC_OC_REVIEW WHERE SAMPLE = %s", (name,))
+    tmp.rename(target)
+    sync()
+    return dict(ok=True, sample=name, items=len(s["items"]), crops=sum(1 for m in members if m.filename.startswith("crops/")))
 
 
 @app.get("/crops/{name}/{file}")

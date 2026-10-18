@@ -18,6 +18,7 @@ uv sync --extra paddle --extra tesseract
 uv run opencredits run VIDEO --from S --to S --work DIR [--engine paddle|tesseract] [--lang en|ja|zh|fa] [--tmdb-credits FILE --tmdb-movie ID]
 uv run opencredits review --work DIR --tag ENGINE-LANG --tmdb-credits FILE --tmdb-movie ID   # sample of new lines to judge
 uv run opencredits review --work DIR --tag ENGINE-LANG --score                                 # after verdicts.json is saved
+uv run opencredits review --work DIR --tag ENGINE-LANG [--tmdb-credits FILE --tmdb-movie ID] --upload   # to the online review page
 ```
 
 ## Known limits (pilot)

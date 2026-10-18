@@ -115,14 +115,23 @@ def main() -> None:
     v.add_argument("--tmdb-credits", help="result file of doc/sql/pilot-tmdb-credits.sql")
     v.add_argument("--tmdb-movie", type=int)
     v.add_argument("--score", action="store_true", help="score WORK/review-TAG/verdicts.json")
+    v.add_argument("--upload", action="store_true", help="send the sample to the online review page (OC_REVIEW_USER, OC_REVIEW_PASSWORD)")
+    v.add_argument("--replace", action="store_true", help="with --upload: replace a sample already online, dropping its verdicts")
+    v.add_argument("--url", default=review.URL, help="review page address")
     a = p.parse_args()
     if a.cmd in ("run", "review") and a.tmdb_credits and not a.tmdb_movie: p.error("--tmdb-credits needs --tmdb-movie")
     if a.cmd == "run": run(a)
     if a.cmd == "review":
         if a.score: print(review.score(Path(a.work) / f"review-{a.tag}")); return
-        if not a.tmdb_credits: p.error("review needs --tmdb-credits and --tmdb-movie")
-        out = review.build(Path(a.work), a.tag, reference.load_tmdb(Path(a.tmdb_credits), a.tmdb_movie), a.tmdb_movie)
-        print(f"{out / 'index.html'}")
+        out = Path(a.work) / f"review-{a.tag}"
+        if a.tmdb_credits:
+            out = review.build(Path(a.work), a.tag, reference.load_tmdb(Path(a.tmdb_credits), a.tmdb_movie), a.tmdb_movie)
+            print(f"{out / 'index.html'}")
+        elif not (a.upload and (out / "sample.json").exists()): p.error("review needs --tmdb-credits and --tmdb-movie")
+        if a.upload:
+            name = f"{Path(a.work).name}-{a.tag}"
+            r = review.upload(out, name, a.url, a.replace)
+            print(f"uploaded {r['items']} lines, {r['crops']} crops -> {a.url.rstrip('/')}/?s={name}")
 
 
 if __name__ == "__main__":

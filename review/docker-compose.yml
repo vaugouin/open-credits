@@ -8,13 +8,14 @@ services:
     container_name: oc-review
     restart: unless-stopped
     network_mode: host
+    user: "1000:1000"     # debian on the VPS: owns shared_data/oc-review, where uploads are written
     env_file: .env
     environment:
       REVIEW_HOST: 172.17.0.1
       REVIEW_PORT: "8196"
       REVIEW_SHARED: /shared
     volumes:
-      - /home/debian/docker/shared_data/oc-review:/shared:ro
+      - /home/debian/docker/shared_data/oc-review:/shared
     read_only: true
     cap_drop:
       - ALL

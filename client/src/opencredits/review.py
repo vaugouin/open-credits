@@ -1,8 +1,14 @@
 """Precision check of the new lines (charter, decision 27 c): a random sample of the lines TMDb does not have,
 each shown with a crop of a frame where it is on screen, for a person to judge; then the score of the verdicts."""
+import base64
 import html
+import io
 import json
+import os
 import random
+import urllib.error
+import urllib.request
+import zipfile
 from pathlib import Path
 
 from PIL import Image
@@ -12,6 +18,7 @@ from . import frames, reference, scroll
 SAMPLE = 50
 SEED = 27            # fixed, so the same sample comes back for a title
 MARGIN = 0.6         # crop margin around the line, in line heights
+URL = "https://www.vaugouin.com/oc-review/"   # the review stack (review/ in this repository)
 VERDICTS = [("exact", "exact: the text is what the screen shows"),
             ("minor", "minor: case, spacing or punctuation only"),
             ("wrong", "wrong: a letter or a word differs"),
@@ -125,3 +132,20 @@ def score(folder: Path) -> str:
         x = v[str(i["id"])]
         if x["verdict"] != "exact": out.append(f"  {i['id']:02} {x['verdict']:5} {i['text']}" + (f"  -> {x['note']}" if x["note"] else ""))
     return "\n".join(out)
+
+
+def upload(folder: Path, name: str, url: str = URL, replace: bool = False) -> dict:
+    """Send a sample folder to the review stack as one zip; basic auth from OC_REVIEW_USER and OC_REVIEW_PASSWORD."""
+    user, pwd = os.environ.get("OC_REVIEW_USER"), os.environ.get("OC_REVIEW_PASSWORD")
+    if not user or not pwd: raise SystemExit("set OC_REVIEW_USER and OC_REVIEW_PASSWORD (the basic-auth login of the review page)")
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:        # PNG files are compressed already
+        for f in ["sample.json", "verdicts.json"] + [f"crops/{p.name}" for p in sorted((folder / "crops").glob("*.png"))]:
+            if (folder / f).is_file(): z.write(folder / f, f)
+    req = urllib.request.Request(url.rstrip("/") + f"/api/samples/{name}" + ("?replace=true" if replace else ""),
+                                 data=buf.getvalue(), method="POST", headers={"Content-Type": "application/zip",
+                                 "Authorization": "Basic " + base64.b64encode(f"{user}:{pwd}".encode()).decode()})
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r: return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        raise SystemExit(f"upload refused ({e.code}): {e.read().decode(errors='replace')[:300]}")

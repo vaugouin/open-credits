@@ -52,11 +52,12 @@ Stages 2 to 6 write to the window folder; a stage whose output exists is skipped
 
 ## Precision check of the new lines
 
-Once a title's windows are read, `review` draws 50 lines at random (fixed seed) among those that hold no TMDb name of the title, and writes `<work>/review-<engine>-<lang>/index.html` with a crop of a frame for each. Open the page in a browser, judge each line (exact, minor, wrong, noise), click *Save verdicts* and put the downloaded `verdicts.json` in that folder; `--score` then gives the precision (charter, decision 27 c).
+Once a title's windows are read, `review` draws 50 lines at random (fixed seed) among those that hold no TMDb name of the title, and writes `<work>/review-<engine>-<lang>/index.html` with a crop of a frame for each. Open the page in a browser, judge each line (exact, minor, wrong, noise), click *Save verdicts* and put the downloaded `verdicts.json` in that folder; `--score` then gives the precision (charter, decision 27 c). With `--upload`, the sample goes to the online review page instead ([`../review/`](../review/README.md)), where each verdict is saved as it is clicked.
 
 ```bash
 uv run opencredits review --work U:/open-credits/work/alien-348 --tag paddle-en     --tmdb-credits ../doc/sql/pilot-tmdb-credits-20261017.txt --tmdb-movie 348
 uv run opencredits review --work U:/open-credits/work/alien-348 --tag paddle-en --score
+uv run opencredits review --work U:/open-credits/work/alien-348 --tag paddle-en --upload   # OC_REVIEW_USER, OC_REVIEW_PASSWORD
 ```
 
 ## Results

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from . import cards, clean, frames, ocr, page, reference, scroll, vote
+from . import cards, clean, frames, ocr, page, reference, review, scroll, vote
 
 
 def stage_json(path: Path, build):
@@ -109,9 +109,20 @@ def main() -> None:
     r.add_argument("--lang", choices=sorted(ocr.PADDLE_REC), default="en", help="language of the credits (recognition model)")
     r.add_argument("--tmdb-credits", help="result file of doc/sql/pilot-tmdb-credits.sql")
     r.add_argument("--tmdb-movie", type=int, help="TMDb movie ID of this title in that file")
+    v = sub.add_parser("review", help="sample the new lines of a work folder for a precision check, or score the verdicts")
+    v.add_argument("--work", required=True, help="work folder of the title, after its runs")
+    v.add_argument("--tag", default="paddle-en", help="engine-lang of the runs to sample")
+    v.add_argument("--tmdb-credits", help="result file of doc/sql/pilot-tmdb-credits.sql")
+    v.add_argument("--tmdb-movie", type=int)
+    v.add_argument("--score", action="store_true", help="score WORK/review-TAG/verdicts.json")
     a = p.parse_args()
-    if a.cmd == "run" and a.tmdb_credits and not a.tmdb_movie: p.error("--tmdb-credits needs --tmdb-movie")
+    if a.cmd in ("run", "review") and a.tmdb_credits and not a.tmdb_movie: p.error("--tmdb-credits needs --tmdb-movie")
     if a.cmd == "run": run(a)
+    if a.cmd == "review":
+        if a.score: print(review.score(Path(a.work) / f"review-{a.tag}")); return
+        if not a.tmdb_credits: p.error("review needs --tmdb-credits and --tmdb-movie")
+        out = review.build(Path(a.work), a.tag, reference.load_tmdb(Path(a.tmdb_credits), a.tmdb_movie))
+        print(f"{out / 'index.html'}")
 
 
 if __name__ == "__main__":

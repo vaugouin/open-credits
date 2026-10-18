@@ -50,6 +50,15 @@ uv run opencredits run "T:/public/video/HDFilms/A Separation 2011 1080p BluRay x
 
 Stages 2 to 6 write to the window folder; a stage whose output exists is skipped: delete the file to redo it.
 
+## Precision check of the new lines
+
+Once a title's windows are read, `review` draws 50 lines at random (fixed seed) among those that hold no TMDb name of the title, and writes `<work>/review-<engine>-<lang>/index.html` with a crop of a frame for each. Open the page in a browser, judge each line (exact, minor, wrong, noise), click *Save verdicts* and put the downloaded `verdicts.json` in that folder; `--score` then gives the precision (charter, decision 27 c).
+
+```bash
+uv run opencredits review --work U:/open-credits/work/alien-348 --tag paddle-en     --tmdb-credits ../doc/sql/pilot-tmdb-credits-20261017.txt --tmdb-movie 348
+uv run opencredits review --work U:/open-credits/work/alien-348 --tag paddle-en --score
+```
+
 ## Results
 
 | Title | Credits read | Lines | Time | TMDb people read exactly |

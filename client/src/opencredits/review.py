@@ -42,7 +42,7 @@ def frame_y(l: dict, t: int, work: Path, cache: dict) -> float:
     return l["y"] - cache[l["window"]][t]
 
 
-def build(work: Path, tag: str, people: dict[str, dict], n: int = SAMPLE) -> Path:
+def build(work: Path, tag: str, people: dict[str, dict], movie: int, n: int = SAMPLE) -> Path:
     fr = frames.frames_in(work / "frames")
     lines = new_lines(work, tag, people)
     sample = sorted(random.Random(SEED).sample(lines, min(n, len(lines))), key=lambda l: (l["window"], l["frames"][0], l["y"]))
@@ -55,7 +55,7 @@ def build(work: Path, tag: str, people: dict[str, dict], n: int = SAMPLE) -> Pat
         im.crop(tuple(round(v) for v in box)).save(out / "crops" / f"{i:02}.png")
         items.append(dict(id=i, text=l["text"], raw=l.get("raw"), kind=l["kind"], window=l["window"], t=t,
                           agree=l["agree"], seen=l["seen"]))
-    (out / "sample.json").write_text(json.dumps(dict(tag=tag, seed=SEED, new_lines=len(lines), items=items),
+    (out / "sample.json").write_text(json.dumps(dict(title=work.name, movie=movie, tag=tag, seed=SEED, new_lines=len(lines), items=items),
                                                 ensure_ascii=False, indent=1), encoding="utf-8")
     (out / "index.html").write_text(page(work.name, tag, len(lines), items), encoding="utf-8")
     return out

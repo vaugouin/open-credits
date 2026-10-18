@@ -121,7 +121,7 @@ def main() -> None:
     if a.cmd == "review":
         if a.score: print(review.score(Path(a.work) / f"review-{a.tag}")); return
         if not a.tmdb_credits: p.error("review needs --tmdb-credits and --tmdb-movie")
-        out = review.build(Path(a.work), a.tag, reference.load_tmdb(Path(a.tmdb_credits), a.tmdb_movie))
+        out = review.build(Path(a.work), a.tag, reference.load_tmdb(Path(a.tmdb_credits), a.tmdb_movie), a.tmdb_movie)
         print(f"{out / 'index.html'}")
 
 

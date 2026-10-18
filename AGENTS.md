@@ -31,6 +31,8 @@ The client works in a local SQLite file and exports one JSON bundle per submissi
 
 `client/` holds the Python package `opencredits` (its own `pyproject.toml` and `AGENTS.md`): frames, scroll, virtual page, OCR, vote and TMDb check, run by `uv run opencredits run`. Read `client/AGENTS.md` before changing it.
 
+`review/` is the pilot's online hand-check (charter, decision 27 c): a small FastAPI stack on the VPS (`www.vaugouin.com/oc-review/`, basic auth at the proxy) that shows the samples built by `opencredits review` and saves each verdict in `T_WC_OC_REVIEW`. Read `review/AGENTS.md` before changing it.
+
 ## Conventions
 
 - Python with `uv`. LF line endings (`.gitattributes`).

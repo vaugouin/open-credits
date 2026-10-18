@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Credits review</title>
+<style>
+:root { --bg:#fafafa; --fg:#222; --card:#fff; --line:#ddd; --mute:#777; --ok:#2a7d3a; --bad:#b3261e; }
+@media (prefers-color-scheme: dark) { :root { --bg:#161616; --fg:#eee; --card:#222; --line:#444; --mute:#999; --ok:#6fcf7f; --bad:#f28b82; } }
+body { background:var(--bg); color:var(--fg); font:16px/1.4 system-ui, sans-serif; margin:0 auto; max-width:1000px; padding:16px; }
+a { color:inherit; }
+table { border-collapse:collapse; width:100%; }
+td, th { border-bottom:1px solid var(--line); padding:6px 8px; text-align:left; }
+.item { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px; margin:12px 0; }
+.item.done { opacity:.6; }
+img { max-width:100%; background:#000; display:block; margin:6px 0; }
+.meta, .raw, .muted { color:var(--mute); font-size:13px; }
+.text { font-size:22px; margin:4px 0; }
+.v label { margin-right:14px; white-space:nowrap; }
+.note { width:100%; box-sizing:border-box; margin-top:6px; padding:4px; font-size:16px; }
+#bar { position:sticky; top:0; background:var(--bg); padding:8px 0; border-bottom:1px solid var(--line); z-index:1; }
+.saved { color:var(--ok); } .error { color:var(--bad); }
+</style>
+</head>
+<body>
+<div id="app">Loading…</div>
+<script>
+const LEGEND = [["exact", "the text is what the screen shows"], ["minor", "case, spacing or punctuation only"],
+                ["wrong", "a letter or a word differs"], ["noise", "not credit text on screen"]];
+const app = document.getElementById("app");
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const pct = (a, b) => b ? Math.round(100 * a / b) + " %" : "";
+
+async function list() {
+  const r = await (await fetch("api/samples")).json();
+  app.innerHTML = `<h1>Credits review</h1>
+    <p>Precision of the lines that hold no TMDb name (charter, decision 27 c). Each verdict is saved as you click.</p>
+    <table><tr><th>Sample</th><th>Judged</th><th>Exact</th><th>Exact or minor</th></tr>
+    ${r.samples.map(s => `<tr><td><a href="?s=${encodeURIComponent(s.SAMPLE)}">${esc(s.SAMPLE)}</a></td>
+      <td>${s.judged} of ${s.total}</td><td>${pct(s.exact, s.judged)}</td><td>${pct(s.exact_or_minor, s.judged)}</td></tr>`).join("")}
+    </table><p class="muted">version ${esc(r.version)}</p>`;
+}
+
+async function sample(name) {
+  const r = await (await fetch("api/samples/" + encodeURIComponent(name))).json();
+  app.innerHTML = `<p><a href="./">← all samples</a></p><h1>${esc(r.sample)}</h1>
+    <p>${r.items.length} lines drawn at random from the ${r.new_lines} lines that hold no TMDb name. Judge the text against the crop:</p>
+    <ul>${LEGEND.map(([k, d]) => `<li><b>${k}</b>: ${d}</li>`).join("")}</ul>
+    <div id="bar"><span id="count"></span> <span id="status" class="muted"></span></div>
+    ${r.items.map(it => `<div class="item${it.VERDICT ? " done" : ""}" id="i${it.ITEM}" data-item="${it.ITEM}">
+      <div class="meta">${String(it.ITEM).padStart(2, "0")} · ${esc(it.LINE_KIND)} · ${esc(it.WINDOW_NAME)} · ${it.FRAME_T} s</div>
+      <img loading="lazy" src="crops/${encodeURIComponent(name)}/${String(it.ITEM).padStart(2, "0")}.png" alt="">
+      <div class="text" dir="auto">${esc(it.LINE_TEXT)}</div>
+      ${it.LINE_RAW ? `<div class="raw" dir="auto">voted: ${esc(it.LINE_RAW)}</div>` : ""}
+      <div class="v">${LEGEND.map(([k, d]) => `<label title="${d}"><input type="radio" name="v${it.ITEM}" value="${k}"${it.VERDICT === k ? " checked" : ""}> ${k}</label>`).join("")}
+      <input class="note" dir="auto" placeholder="what the screen shows, if different" value="${esc(it.NOTE)}"></div></div>`).join("")}`;
+  const count = () => { const n = app.querySelectorAll(".item.done").length;
+    document.getElementById("count").textContent = `${n} of ${r.items.length} judged`; };
+  count();
+  const save = async el => {
+    const box = el.closest(".item"), item = box.dataset.item, st = document.getElementById("status");
+    const v = box.querySelector("input[type=radio]:checked");
+    st.className = "muted"; st.textContent = "saving…";
+    const res = await fetch(`api/samples/${encodeURIComponent(name)}/${item}`, {method: "PUT",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({verdict: v ? v.value : null, note: box.querySelector(".note").value})}).catch(() => null);
+    if (res && res.ok) { box.classList.toggle("done", !!v); count(); st.className = "saved"; st.textContent = `line ${item} saved`; }
+    else { st.className = "error"; st.textContent = `line ${item} NOT saved, try again`; }
+  };
+  app.addEventListener("change", e => { if (e.target.matches("input[type=radio], .note")) save(e.target); });
+}
+
+const s = new URLSearchParams(location.search).get("s");
+(s ? sample(s) : list()).catch(e => { app.innerHTML = `<p class="error">Could not load: ${esc(e)}</p>`; });
+</script>
+</body>
+</html>

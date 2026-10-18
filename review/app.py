@@ -2,7 +2,12 @@
 
 Samples are folders copied from the client (`opencredits review`) under SHARED: <sample>/sample.json and
 <sample>/crops/NN.png, sent by the client as one zip (`opencredits review --upload`). On upload and on listing,
-new samples are loaded into T_WC_OC_REVIEW, and a verdicts.json from the offline page fills the verdicts not yet given."""
+new samples are loaded into T_WC_OC_REVIEW, and a verdicts.json from the offline page fills the verdicts not yet given.
+
+Submission bundles (`opencredits send`) arrive at POST api/submissions: checked against the format
+(schema/check_submission.py, copied into the image), then kept in SHARED/incoming/ for the importer
+(technology-choices, section 4: the API only stores, one import process loads)."""
+import hashlib
 import io
 import json
 import os
@@ -14,6 +19,8 @@ import uuid
 from datetime import date, datetime
 from pathlib import Path
 from zipfile import BadZipFile, ZipFile
+
+import sys
 
 import pymysql
 from fastapi import FastAPI, HTTPException, Request
@@ -28,6 +35,13 @@ CROP = re.compile(r"^\d{2,3}\.png$")
 MEMBER = re.compile(r"^(sample\.json|verdicts\.json|crops/\d{2,3}\.png)$")   # the only files a sample zip may hold
 MAX_ZIP = 30 * 1024 * 1024
 MAX_FILES = 300
+INCOMING = SHARED / "incoming"
+BUNDLE_MEMBER = re.compile(r"^(submission\.json|frames/[0-9a-f-]{36}\.webp)$")   # what a submission zip may hold
+SUB_ID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
+
+# the format checker: copied next to the app by the Dockerfile, or read from the repository when run from a clone
+sys.path[:0] = [str(Path(__file__).parent / "schema"), str(Path(__file__).parent.parent / "schema")]
+from check_submission import check, describe_work  # noqa: E402
 
 app = FastAPI(title="open-credits review", version=VERSION)
 
@@ -144,6 +158,48 @@ async def upload(name: str, request: Request, replace: bool = False):
     tmp.rename(target)
     sync()
     return dict(ok=True, sample=name, items=len(s["items"]), crops=sum(1 for m in members if m.filename.startswith("crops/")))
+
+
+@app.post("/api/submissions")
+async def submission(request: Request):
+    """A submission bundle from the client. Checked, then kept as incoming/submission-<id>.zip; the same bundle
+    sent twice is accepted (already), a different one with the same id is refused."""
+    body = await request.body()
+    if len(body) > MAX_ZIP: raise HTTPException(413, "bundle too large")
+    try:
+        z = ZipFile(io.BytesIO(body)); members = [m for m in z.infolist() if not m.is_dir()]
+    except BadZipFile:
+        raise HTTPException(422, "not a zip")
+    bad = [m.filename for m in members if not BUNDLE_MEMBER.match(m.filename)]
+    if bad or not any(m.filename == "submission.json" for m in members) or len(members) > MAX_FILES:
+        raise HTTPException(422, f"unexpected content: {bad[:5]}" if bad else "submission.json missing or too many files")
+    if sum(m.file_size for m in members) > 8 * MAX_ZIP: raise HTTPException(413, "bundle expands too much")
+    try:
+        doc = json.loads(z.read("submission.json").decode("utf-8"))
+    except Exception:
+        raise HTTPException(422, "submission.json unreadable")
+    errors = check(doc, {m.filename for m in members})
+    if errors: raise HTTPException(422, dict(errors=errors[:20], count=len(errors)))
+    sid = doc["submission"]["id"]
+    if not SUB_ID.match(sid): raise HTTPException(422, "submission id: a UUID version 7")
+    INCOMING.mkdir(exist_ok=True)
+    target = INCOMING / f"submission-{sid}.zip"
+    if target.exists():
+        if hashlib.sha256(target.read_bytes()).digest() == hashlib.sha256(body).digest():
+            return dict(ok=True, already=True, id=sid, work=describe_work(doc["work"]))
+        raise HTTPException(409, "another bundle with this submission id is already there")
+    tmp = INCOMING / f".{sid}.part"
+    tmp.write_bytes(body); tmp.rename(target)
+    return dict(ok=True, already=False, id=sid, work=describe_work(doc["work"]),
+                segments=len(doc["segments"]), lines=sum(len(g["text_lines"]) for g in doc["segments"]))
+
+
+@app.get("/api/submissions")
+def submissions():
+    """The bundles waiting for the importer: id, size, arrival time."""
+    files = sorted(INCOMING.glob("submission-*.zip"), key=lambda f: f.stat().st_mtime, reverse=True) if INCOMING.exists() else []
+    return [dict(id=f.stem[len("submission-"):], kb=f.stat().st_size // 1024,
+                 received=datetime.fromtimestamp(f.stat().st_mtime).isoformat(timespec="seconds")) for f in files]
 
 
 @app.get("/crops/{name}/{file}")

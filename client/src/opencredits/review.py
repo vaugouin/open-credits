@@ -4,7 +4,6 @@ import base64
 import html
 import io
 import json
-import os
 import random
 import urllib.error
 import urllib.request
@@ -13,7 +12,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from . import frames, reference, scroll
+from . import config, frames, reference, scroll
 
 SAMPLE = 50
 SEED = 27            # fixed, so the same sample comes back for a title
@@ -136,7 +135,7 @@ def score(folder: Path) -> str:
 
 def upload(folder: Path, name: str, url: str = URL, replace: bool = False) -> dict:
     """Send a sample folder to the review stack as one zip; basic auth from OC_REVIEW_USER and OC_REVIEW_PASSWORD."""
-    user, pwd = os.environ.get("OC_REVIEW_USER"), os.environ.get("OC_REVIEW_PASSWORD")
+    user, pwd = config.get("OC_REVIEW_USER"), config.get("OC_REVIEW_PASSWORD")
     if not user or not pwd: raise SystemExit("set OC_REVIEW_USER and OC_REVIEW_PASSWORD (the basic-auth login of the review page)")
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as z:        # PNG files are compressed already

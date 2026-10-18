@@ -12,6 +12,7 @@
 --     fingerprint and opensubtitles_hash, and the master keeps its own ids for them;
 --   - a few columns stay on this machine and are never exported: part.local_path,
 --     frame.evidence_path, submission.status and exported_at, work.plex_rating_key;
+--     and so does the job queue (last section), which has no master counterpart;
 --   - the vocabulary is keyed by code, as the bundle uses it (credit.role_code);
 --     it is replaced as a whole when a new version is downloaded (meta.vocabulary_version).
 --
@@ -19,7 +20,7 @@
 -- on every connection. Booleans are 0/1, lists are JSON arrays, UUIDs are version 7 text.
 -- =============================================================================
 
-PRAGMA user_version = 1;  -- schema version of this file
+PRAGMA user_version = 2;  -- schema version of this file (2: the job queue)
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE meta (
@@ -270,3 +271,32 @@ CREATE TABLE role_alias (
   role_modifiers TEXT CHECK (role_modifiers IS NULL OR json_valid(role_modifiers)),
   PRIMARY KEY (wording, language)
 ) STRICT;
+
+
+-- Local only: the job queue ------------------------------------------------------
+-- One job per video file to read, taken in the order queued (opencredits worker). Never exported, no master
+-- counterpart. IF NOT EXISTS: store.connect runs this section on a file created at schema version 1.
+
+CREATE TABLE IF NOT EXISTS job (
+  id              TEXT PRIMARY KEY CHECK (length(id) = 36),
+  local_path      TEXT NOT NULL,   -- the video file, only read
+  plex_rating_key INTEGER,         -- where the title, ids, editions, audio languages and markers come from
+  tmdb_movie_id   INTEGER,         -- given by hand, or from Plex
+  title           TEXT,
+  title_language  TEXT,
+  year            INTEGER,
+  lang            TEXT,            -- credits language (OCR model), given by hand; detected when null
+  windows         TEXT CHECK (windows IS NULL OR json_valid(windows)),   -- [[from_s, to_s], ...] given by hand
+  status          TEXT NOT NULL DEFAULT 'queued'
+                  CHECK (status IN ('queued', 'running', 'ready', 'sent', 'failed', 'skipped')),
+  queued_at       TEXT NOT NULL,   -- ISO 8601 UTC; the queue order
+  started_at      TEXT,
+  finished_at     TEXT,
+  attempts        INTEGER NOT NULL DEFAULT 0,
+  error           TEXT,            -- why it failed or was skipped
+  report          TEXT CHECK (report IS NULL OR json_valid(report)),   -- language, windows, counts, seconds
+  submission_id   TEXT REFERENCES submission (id) ON DELETE SET NULL,
+  bundle_path     TEXT
+) STRICT;
+CREATE INDEX IF NOT EXISTS job_queue ON job (status, queued_at);
+CREATE INDEX IF NOT EXISTS job_path  ON job (local_path);

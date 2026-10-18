@@ -3,7 +3,9 @@
 # bridge address, which the reverseproxy container reaches.
 services:
   oc-review:
-    build: .
+    build:
+      context: ..                  # the repository root: the image also takes schema/
+      dockerfile: review/Dockerfile
     image: oc-review:local
     container_name: oc-review
     restart: unless-stopped

@@ -1,4 +1,5 @@
-"""Command line: opencredits run VIDEO --from S --to S --work DIR [--lang] [--tmdb-credits FILE --tmdb-movie ID].
+"""Command line: opencredits run VIDEO --from S --to S --work DIR [--lang] [--tmdb-credits FILE --tmdb-movie ID],
+and the queue: enqueue, jobs, worker, send, retry.
 
 A run reads one time window: the rolling credits if the window holds a roll, and the cards (credits that stand
 still) in the rest of it. Frames are shared in WORK/frames; each window writes to WORK/w<from>-<to>/. Each stage
@@ -9,7 +10,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from . import bundle, cards, clean, frames, ocr, page, reference, review, scroll, store, vote
+from . import bundle, cards, clean, frames, jobs, ocr, outbox, page, plex, reference, review, scroll, store, vote
 
 
 def stage_json(path: Path, build):
@@ -126,12 +127,33 @@ def main() -> None:
     m.add_argument("--title", required=True, help="title as your library shows it (title_hint)")
     m.add_argument("--title-language", help="BCP 47 language of --title")
     m.add_argument("--year", type=int)
-    m.add_argument("--db", help="SQLite file (default: opencredits.sqlite beside the work folder)")
+    m.add_argument("--db", help="SQLite file (default: opencredits.sqlite in the client's local folder)")
+    e = sub.add_parser("enqueue", help="queue video files, or Plex movies, for the worker")
+    e.add_argument("video", nargs="*", help="video files or folders (their video files); Plex supplies the ids when it knows the file")
+    e.add_argument("--plex", type=int, nargs="*", default=[], metavar="KEY", help="Plex rating keys")
+    e.add_argument("--plex-recent", type=int, metavar="N", help="the N movies added to Plex most recently")
+    e.add_argument("--tmdb-movie", type=int); e.add_argument("--title"); e.add_argument("--title-language"); e.add_argument("--year", type=int)
+    e.add_argument("--lang", choices=sorted(ocr.PADDLE_REC), help="credits language (default: decided on the frames)")
+    e.add_argument("--window", nargs=2, type=int, action="append", metavar=("FROM", "TO"), help="time window in seconds (repeatable; default: Plex markers, else opening and end)")
+    e.add_argument("--again", action="store_true", help="queue even a file already read or sent")
+    q = sub.add_parser("jobs", help="the queue: counts and the latest jobs")
+    q.add_argument("--status", choices=("queued", "running", "ready", "sent", "failed", "skipped"))
+    q.add_argument("--limit", type=int, default=50)
+    k = sub.add_parser("worker", help="read the queued jobs one after the other, oldest first; waits when the queue is empty")
+    k.add_argument("--once", action="store_true", help="stop when the queue is empty")
+    k.add_argument("--send", action="store_true", help="send each bundle once it is ready (otherwise: opencredits send)")
+    k.add_argument("--watch-plex", action="store_true", help="queue the movies added to Plex while running")
+    k.add_argument("--keep-work", action="store_true", help="keep each job's frames and stage files")
+    s_ = sub.add_parser("send", help="send ready bundles to the server")
+    s_.add_argument("job", nargs="*", help="job ids or id prefixes (default: every ready job)")
+    t = sub.add_parser("retry", help="queue failed or skipped jobs again")
+    t.add_argument("job", nargs="*", help="job ids or id prefixes (default: every failed job)")
+    for x in (e, q, k, s_, t): x.add_argument("--db", help="SQLite file (default: opencredits.sqlite in the client's local folder)")
     a = p.parse_args()
     if a.cmd in ("run", "review") and a.tmdb_credits and not a.tmdb_movie: p.error("--tmdb-credits needs --tmdb-movie")
     if a.cmd == "run": run(a)
     if a.cmd == "submit":
-        path = Path(a.db) if a.db else Path(a.work).parent / "opencredits.sqlite"
+        path = Path(a.db) if a.db else store.default_path()
         db = store.connect(path)
         sid = store.write(db, a.video, Path(a.work), a.tag, a.tmdb_movie, a.title, a.year, a.title_language)
         n = db.execute("""SELECT COUNT(DISTINCT g.id), COUNT(DISTINCT f.id), COUNT(DISTINCT l.id) FROM segment g
@@ -140,6 +162,7 @@ def main() -> None:
         out = bundle.write(db, sid, Path(a.work))
         print(f"{path}: submission {sid}, {n[0]} segments, {n[1]} frames, {n[2]} lines")
         print(f"{out} ({out.stat().st_size // 1024} KB)")
+    if a.cmd in ("enqueue", "jobs", "worker", "send", "retry"): queue_cmd(p, a)
     if a.cmd == "review":
         if a.score: print(review.score(Path(a.work) / f"review-{a.tag}")); return
         out = Path(a.work) / f"review-{a.tag}"
@@ -151,6 +174,33 @@ def main() -> None:
             name = f"{Path(a.work).name}-{a.tag}"
             r = review.upload(out, name, a.url, a.replace)
             print(f"uploaded {r['items']} lines, {r['crops']} crops -> {a.url.rstrip('/')}/?s={name}")
+
+
+VIDEO = {".mkv", ".mp4", ".avi", ".m4v", ".mov", ".ts", ".m2ts", ".wmv", ".mpg"}
+
+
+def queue_cmd(p, a) -> None:
+    db = store.connect(Path(a.db) if a.db else None)
+    if a.cmd == "enqueue":
+        files = []
+        for v in a.video:
+            v = Path(v)
+            files += sorted(f for f in v.rglob("*") if f.suffix.lower() in VIDEO) if v.is_dir() else [v]
+        if len(files) > 1 and (a.tmdb_movie or a.title): p.error("--tmdb-movie and --title go with one file")
+        added = [jobs.add(db, str(f), a.again, tmdb_movie_id=a.tmdb_movie, title=a.title, title_language=a.title_language,
+                          year=a.year, lang=a.lang, windows=a.window) for f in files]
+        keys = list(a.plex) + ([m["rating_key"] for m in reversed(plex.recent(a.plex_recent))] if a.plex_recent else [])
+        added += [jobs.add_plex(db, key, a.again) for key in keys]
+        print(f"{sum(1 for x in added if x)} queued, {sum(1 for x in added if not x)} already there or without a single-file copy")
+    if a.cmd == "jobs": print(jobs.listing(db, a.status, a.limit))
+    if a.cmd == "worker": jobs.worker(db, a.once, a.send, a.watch_plex, a.keep_work)
+    if a.cmd == "send": outbox.send_ready(db, a.job or None)
+    if a.cmd == "retry":
+        if a.job:
+            for i in a.job: db.execute("UPDATE job SET status = 'queued', attempts = 0 WHERE id LIKE ? AND status IN ('failed', 'skipped')", (i + "%",))
+        else:
+            db.execute("UPDATE job SET status = 'queued', attempts = 0 WHERE status = 'failed'")
+        db.commit(); print(jobs.listing(db, "queued"))
 
 
 if __name__ == "__main__":

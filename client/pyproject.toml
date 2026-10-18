@@ -1,7 +1,7 @@
 [project]
 name = "opencredits"
-version = "0.7.0"
-description = "open-credits client prototype: read the credits of a video file with OCR, store them in SQLite, build a submission bundle"
+version = "0.8.0"
+description = "open-credits client prototype: read the credits of video files with OCR, from a queue fed by Plex, store them in SQLite, send submission bundles"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12,<3.13"

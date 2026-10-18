@@ -52,7 +52,7 @@ Stages 2 to 6 write to the window folder; a stage whose output exists is skipped
 
 ## SQLite file and submission bundle
 
-Once a title's windows are read, `submit` writes them to the contributor's SQLite file ([`../doc/sql/client-sqlite.sql`](../doc/sql/client-sqlite.sql)) as one submission for the copy and engine, then builds `submission-<id>.zip` in the work folder ([`../doc/submission-format.md`](../doc/submission-format.md)):
+Once a title's windows are read, `submit` writes them to the contributor's SQLite file ([`../doc/sql/client-sqlite.sql`](../doc/sql/client-sqlite.sql); default `%LOCALAPPDATA%/opencredits/opencredits.sqlite`, refused on a network share) as one submission for the copy and engine, then builds `submission-<id>.zip` in the work folder ([`../doc/submission-format.md`](../doc/submission-format.md)):
 
 ```bash
 uv run opencredits submit "T:/public/video/HDFilms/Alien 1979 {edition-Theatrical} REMASTERED PROPER 1080p BluRay x265.mp4"     --work U:/open-credits/work/alien-348 --tag paddle-en --tmdb-movie 348 --title Alien --title-language en --year 1979
@@ -60,6 +60,44 @@ uv run ../schema/check_submission.py U:/open-credits/work/alien-348/submission-<
 ```
 
 The copy is identified by its OpenSubtitles hash and size (the file's path and name stay in the SQLite file, never in the bundle); its edition and source come from the file name (`{edition-Theatrical}`, `BluRay`). Each window gives a segment: the roll (`rolling`, with its scroll speed and each frame's page offset) and the cards (`cards`), with every frame read, its text boxes and perceptual hash, and the voted lines with the frames that saw them. Layer 3, blocks and credits with role codes, is not written yet.
+
+## The queue: a continuous flow of titles
+
+The commands above read one title by hand. The queue reads titles one after the other, unattended: each job is a video file, taken in the order queued, and goes from frames to bundle on its own.
+
+```bash
+uv run opencredits enqueue --plex-recent 20             # the 20 movies added to Plex last
+uv run opencredits enqueue "T:/public/video/HDFilms/Alien 1979 {edition-Theatrical} REMASTERED PROPER 1080p BluRay x265.mp4"
+uv run opencredits enqueue FILE --tmdb-movie 348 --title Alien --year 1979 --lang en --window 0 170 --window 6800 6996   # without Plex
+uv run opencredits jobs                                 # counts and latest jobs
+uv run opencredits worker                               # runs until stopped; --once stops when the queue is empty
+uv run opencredits worker --send --watch-plex           # the continuous flow: new Plex movies queued, bundles sent once ready
+uv run opencredits send [JOB ...]                       # send ready bundles (all of them without ids)
+uv run opencredits retry [JOB ...]                      # queue failed jobs again
+```
+
+What a job finds on its own:
+
+- **What the file is**, from Plex when it knows the file (searched by name, confirmed by size): TMDb and IMDb ids, title (`title_hint`, with the library language when the title is in Latin script), year, edition, audio languages, credits markers. A file Plex does not know needs `--tmdb-movie` and `--title`, or it is skipped. A Plex movie with several files is queued once, with its single-file copy closest to 1080 lines; multi-part copies are skipped for now.
+- **Where to read**: around each Plex credits marker (from 60 s before it), else the first 240 s and the last 600 s. `--window` overrides this.
+- **The credits language** (OCR model), decided on the frames, not the audio: the 6 frames with the most text in the last window are read with the base model (Japanese, Chinese, English), and the script of what comes out decides; when it reads nothing convincing, the Arabic-script model gets the same frames. The audio language decides only when the frames do not. On the four pilot copies the frames gave en, ja, en and fa, all right, where the default audio track would have been wrong twice (the French audio of *Le Voyage de Chihiro*, Japanese credits; the Japanese audio of the Disney copy, English credits).
+
+Measured on *Alien* (theatrical, 1080p, from the NAS): Plex gave the ids and the credits marker, the frames gave English, and the job read the first 240 s (16 cards, 174 frames with text, 354 s) and 6749 to 6997 s (the roll and one card, 337 s): 255 lines against 254 for the hand-set windows, 751 s in all, a 65 KB bundle.
+
+Each job works in `%LOCALAPPDATA%/opencredits/work/<job id>/` (deleted once the bundle is built; `--keep-work` keeps it), and its bundle goes to `%LOCALAPPDATA%/opencredits/outbox/`. A job left running by a crash returns to the queue when the worker starts, and fails after 3 starts. The worker appends what it prints to `%LOCALAPPDATA%/opencredits/worker.log`. Sending posts each bundle to the server's `api/submissions` ([`../review/`](../review/README.md)), which checks it against the format and keeps it for the importer; a job sent is marked `sent`, its submission `exported`.
+
+Settings live in `%LOCALAPPDATA%/opencredits/opencredits.env` (`KEY=VALUE` lines, overridden by the environment; never in git):
+
+```
+PLEX_SERVER_URL=https://...plex.direct:32400
+PLEX_TOKEN=...
+OC_PLEX_SECTIONS=4                 # movie libraries to read (default: all)
+OC_PATH_MAP=/volume1/sharing=T:    # Plex paths to local paths
+OC_REVIEW_USER=...                 # the server's basic-auth login, also used by review --upload
+OC_REVIEW_PASSWORD=...
+```
+
+To run it at every logon, a Task Scheduler task can start `uv run --project C:/Users/vaugo/Code/open-credits/client opencredits worker --send --watch-plex`.
 
 ## Precision check of the new lines
 

@@ -127,14 +127,20 @@ def load(path):
     return json.loads(path.read_text(encoding="utf-8")), None
 
 
+VALIDATOR = Draft202012Validator(SCHEMA, format_checker=FormatChecker())
+
+
+def check(doc, zip_names=None):
+    """Every error of a submission document, schema first; an empty list means valid. The server imports this."""
+    errors = [f"{'/'.join(map(str, e.absolute_path)) or '(root)'}: {e.message}" for e in VALIDATOR.iter_errors(doc)]
+    return errors or check_references(doc, zip_names)
+
+
 def main(paths):
-    validator = Draft202012Validator(SCHEMA, format_checker=FormatChecker())
     failed = False
     for name in paths:
         doc, zip_names = load(Path(name))
-        errors = [f"{'/'.join(map(str, e.absolute_path)) or '(root)'}: {e.message}" for e in validator.iter_errors(doc)]
-        if not errors:
-            errors = check_references(doc, zip_names)
+        errors = check(doc, zip_names)
         if errors:
             failed = True
             print(f"{name}: {len(errors)} error(s)")

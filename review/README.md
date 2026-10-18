@@ -16,6 +16,10 @@ Without `--tmdb-credits`, `--upload` sends the sample already built. A sample al
 
 The app accepts only `sample.json`, `verdicts.json` and `crops/NN.png` in the zip (30 MB at most), and writes it to `~/docker/shared_data/oc-review/<sample>/` on the VPS.
 
+## Receiving submission bundles
+
+The same app receives the client's submission bundles (`opencredits send`, or `opencredits worker --send`) at `POST /oc-review/api/submissions`, behind the same basic auth. Each bundle is checked against the format (`schema/check_submission.py`); a valid one is kept as `~/docker/shared_data/oc-review/incoming/submission-<id>.zip` for the importer, an invalid one is refused with its first 20 errors. `GET /oc-review/api/submissions` lists the bundles waiting. Nothing is loaded into MariaDB yet.
+
 ## First deployment (VPS)
 
 1. Table: `cd ~/docker/open-credits && git pull && ~/docker/tools/runsqlvaugouindb.sh ~/docker/open-credits/doc/sql/OC-review-table.sql`

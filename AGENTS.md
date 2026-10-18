@@ -31,7 +31,9 @@ The client works in a local SQLite file and exports one JSON bundle per submissi
 
 `client/` holds the Python package `opencredits` (its own `pyproject.toml` and `AGENTS.md`): frames, scroll, virtual page, OCR, vote and TMDb check, run by `uv run opencredits run`. Read `client/AGENTS.md` before changing it.
 
-`review/` is the pilot's online hand-check (charter, decision 27 c): a small FastAPI stack on the VPS (`www.vaugouin.com/oc-review/`, basic auth at the proxy) that shows the samples built by `opencredits review` and saves each verdict in `T_WC_OC_REVIEW`. Read `review/AGENTS.md` before changing it.
+The client also runs as a queue (`opencredits enqueue`, `worker`, `send`): one video file per job, its identity, editions and credits markers from Plex (HTTP API, optional), the credits language decided on the frames, bundles sent to the server. Its SQLite file and settings live in `%LOCALAPPDATA%/opencredits/`, never on a network share.
+
+`review/` is the pilot's online hand-check (charter, decision 27 c): a small FastAPI stack on the VPS (`www.vaugouin.com/oc-review/`, basic auth at the proxy) that shows the samples built by `opencredits review` and saves each verdict in `T_WC_OC_REVIEW`; it also receives the submission bundles (`POST api/submissions`), checks them and keeps them in an incoming folder for the importer. Read `review/AGENTS.md` before changing it.
 
 ## Conventions
 

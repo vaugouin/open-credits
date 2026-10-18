@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from . import __version__, frames, ocr, scroll
+from . import __version__, config, frames, ocr, scroll
 
 DDL_NAME = "client-sqlite.sql"
 CLIENT = "opencredits"
@@ -38,11 +38,23 @@ def ddl() -> str:
     raise FileNotFoundError(DDL_NAME)
 
 
-def connect(path: Path) -> sqlite3.Connection:
+def default_path() -> Path:
+    return config.data_dir() / "opencredits.sqlite"
+
+
+def connect(path: Path | None = None) -> sqlite3.Connection:
+    """The contributor's SQLite file, created or brought to the current schema. Refused on a network share."""
+    path = path or default_path()
+    if config.is_network(path):
+        raise SystemExit(f"{path} is on a network share, where SQLite can corrupt the file: keep it on a local disk "
+                         f"(default {default_path()})")
+    path.parent.mkdir(parents=True, exist_ok=True)
     new = not path.exists()
-    db = sqlite3.connect(path)
-    db.execute("PRAGMA foreign_keys = ON")
+    db = sqlite3.connect(path, timeout=30)
+    db.execute("PRAGMA foreign_keys = ON"); db.execute("PRAGMA journal_mode = WAL")   # the queue is read while the worker writes
     if new: db.executescript(ddl())
+    elif db.execute("PRAGMA user_version").fetchone()[0] < 2:
+        db.executescript(ddl().split("-- Local only: the job queue", 1)[1].split("\n", 1)[1] + "\nPRAGMA user_version = 2;")
     return db
 
 
@@ -102,9 +114,11 @@ def engine_info(engine: str, lang: str) -> tuple[str, str, str]:
 
 
 def write(db: sqlite3.Connection, video: str, work_dir: Path, tag: str, tmdb_movie: int, title: str,
-          year: int | None = None, title_language: str | None = None) -> str:
+          year: int | None = None, title_language: str | None = None, edition: str | None = None,
+          plex_rating_key: int | None = None, imdb_id: str | None = None) -> str:
     """One submission for this copy and engine-lang tag, from every window of the work folder. A previous
-    submission of the same copy and tag that was not exported is replaced."""
+    submission of the same copy and tag that was not exported is replaced. The edition is Plex's, else the
+    file name's {edition-...} tag."""
     engine, lang = tag.split("-", 1)
     name = Path(video).name
     osh, size = opensubtitles_hash(video); info = probe(video)
@@ -114,14 +128,14 @@ def write(db: sqlite3.Connection, video: str, work_dir: Path, tag: str, tmdb_mov
     row = cur.execute("SELECT id FROM work WHERE tmdb_movie_id = ?", (tmdb_movie,)).fetchone()
     work_id = row[0] if row else uuid7()
     if not row:
-        cur.execute("INSERT INTO work (id, kind, tmdb_movie_id, title_hint, title_language, year) VALUES (?, 'movie', ?, ?, ?, ?)",
-                    (work_id, tmdb_movie, title, title_language, year))
+        cur.execute("""INSERT INTO work (id, kind, tmdb_movie_id, imdb_id, title_hint, title_language, year, plex_rating_key)
+                       VALUES (?, 'movie', ?, ?, ?, ?, ?, ?)""", (work_id, tmdb_movie, imdb_id, title, title_language, year, plex_rating_key))
     row = cur.execute("SELECT id FROM copy WHERE fingerprint = ?", (fp,)).fetchone()
     copy_id = row[0] if row else uuid7()
     if not row:
         cur.execute("""INSERT INTO copy (id, work_id, fingerprint, part_count, duration_ms, width, height, fps, edition_hint, source)
                        VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?)""",
-                    (copy_id, work_id, fp, info["duration_ms"], info["width"], info["height"], info["fps"], edition_of(name), source_of(name)))
+                    (copy_id, work_id, fp, info["duration_ms"], info["width"], info["height"], info["fps"], (edition or edition_of(name) or "")[:200] or None, source_of(name)))
         cur.execute("""INSERT INTO part (id, copy_id, part_index, opensubtitles_hash, file_size, duration_ms, offset_ms, local_path)
                        VALUES (?, ?, 1, ?, ?, ?, 0, ?)""", (uuid7(), copy_id, osh, size, info["duration_ms"], str(video)))
     part_id = cur.execute("SELECT id FROM part WHERE copy_id = ? AND part_index = 1", (copy_id,)).fetchone()[0]

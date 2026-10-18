@@ -1,2 +1,2 @@
 """open-credits client prototype: frames, scroll, virtual page, OCR, vote, reference check."""
-__version__ = "0.6.2"
+__version__ = "0.7.0"

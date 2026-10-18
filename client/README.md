@@ -2,7 +2,7 @@
 
 Reads the credits of a video file you own, rolling or shown as cards, on your own PC, with classical OCR on the CPU. Nothing is uploaded; the video file is only read.
 
-Pilot stage: one command reads one time window of one file (the rolling credits if the window holds a roll, the cards in the rest of it) and writes everything to a work folder. It does not yet write the client SQLite database nor a submission bundle.
+Pilot stage: one command reads one time window of one file (the rolling credits if the window holds a roll, the cards in the rest of it) and writes everything to a work folder; another writes the runs of a title to the contributor's SQLite file and builds a submission bundle (layers 0 to 2: frames, text boxes and voted lines; the credits themselves, layer 3, come next).
 
 ## Install
 
@@ -49,6 +49,17 @@ uv run opencredits run "T:/public/video/HDFilms/A Separation 2011 1080p BluRay x
 | 7. Optional check against the TMDb credits (`doc/sql/pilot-tmdb-credits.sql` result), on every name of a person, kanji folded to one form, over every window read for the title | `reference.py` | `../tmdb-<engine>-<lang>.txt` |
 
 Stages 2 to 6 write to the window folder; a stage whose output exists is skipped: delete the file to redo it.
+
+## SQLite file and submission bundle
+
+Once a title's windows are read, `submit` writes them to the contributor's SQLite file ([`../doc/sql/client-sqlite.sql`](../doc/sql/client-sqlite.sql)) as one submission for the copy and engine, then builds `submission-<id>.zip` in the work folder ([`../doc/submission-format.md`](../doc/submission-format.md)):
+
+```bash
+uv run opencredits submit "T:/public/video/HDFilms/Alien 1979 {edition-Theatrical} REMASTERED PROPER 1080p BluRay x265.mp4"     --work U:/open-credits/work/alien-348 --tag paddle-en --tmdb-movie 348 --title Alien --title-language en --year 1979
+uv run ../schema/check_submission.py U:/open-credits/work/alien-348/submission-<id>.zip
+```
+
+The copy is identified by its OpenSubtitles hash and size (the file's path and name stay in the SQLite file, never in the bundle); its edition and source come from the file name (`{edition-Theatrical}`, `BluRay`). Each window gives a segment: the roll (`rolling`, with its scroll speed and each frame's page offset) and the cards (`cards`), with every frame read, its text boxes and perceptual hash, and the voted lines with the frames that saw them. Layer 3, blocks and credits with role codes, is not written yet.
 
 ## Precision check of the new lines
 

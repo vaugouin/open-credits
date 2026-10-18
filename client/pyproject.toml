@@ -1,7 +1,7 @@
 [project]
 name = "opencredits"
-version = "0.6.2"
-description = "open-credits client prototype: read the rolling end credits of a video file with OCR"
+version = "0.7.0"
+description = "open-credits client prototype: read the credits of a video file with OCR, store them in SQLite, build a submission bundle"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12,<3.13"
@@ -26,3 +26,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/opencredits"]
+
+# the client's SQLite schema lives in the repository's doc/sql; a built wheel carries a copy (store.ddl reads either)
+[tool.hatch.build.targets.wheel.force-include]
+"../doc/sql/client-sqlite.sql" = "opencredits/client-sqlite.sql"

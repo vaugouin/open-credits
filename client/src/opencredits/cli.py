@@ -9,7 +9,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from . import cards, clean, frames, ocr, page, reference, review, scroll, vote
+from . import bundle, cards, clean, frames, ocr, page, reference, review, scroll, store, vote
 
 
 def stage_json(path: Path, build):
@@ -118,9 +118,28 @@ def main() -> None:
     v.add_argument("--upload", action="store_true", help="send the sample to the online review page (OC_REVIEW_USER, OC_REVIEW_PASSWORD)")
     v.add_argument("--replace", action="store_true", help="with --upload: replace a sample already online, dropping its verdicts")
     v.add_argument("--url", default=review.URL, help="review page address")
+    m = sub.add_parser("submit", help="write the runs of a work folder to the contributor's SQLite file and build the submission bundle")
+    m.add_argument("video", help="the video file the runs read; it is only read (hash of 128 KB, ffprobe)")
+    m.add_argument("--work", required=True, help="work folder of the title, after its runs")
+    m.add_argument("--tag", default="paddle-en", help="engine-lang of the runs")
+    m.add_argument("--tmdb-movie", type=int, required=True)
+    m.add_argument("--title", required=True, help="title as your library shows it (title_hint)")
+    m.add_argument("--title-language", help="BCP 47 language of --title")
+    m.add_argument("--year", type=int)
+    m.add_argument("--db", help="SQLite file (default: opencredits.sqlite beside the work folder)")
     a = p.parse_args()
     if a.cmd in ("run", "review") and a.tmdb_credits and not a.tmdb_movie: p.error("--tmdb-credits needs --tmdb-movie")
     if a.cmd == "run": run(a)
+    if a.cmd == "submit":
+        path = Path(a.db) if a.db else Path(a.work).parent / "opencredits.sqlite"
+        db = store.connect(path)
+        sid = store.write(db, a.video, Path(a.work), a.tag, a.tmdb_movie, a.title, a.year, a.title_language)
+        n = db.execute("""SELECT COUNT(DISTINCT g.id), COUNT(DISTINCT f.id), COUNT(DISTINCT l.id) FROM segment g
+                          LEFT JOIN frame f ON f.segment_id = g.id LEFT JOIN text_line l ON l.segment_id = g.id
+                          WHERE g.submission_id = ?""", (sid,)).fetchone()
+        out = bundle.write(db, sid, Path(a.work))
+        print(f"{path}: submission {sid}, {n[0]} segments, {n[1]} frames, {n[2]} lines")
+        print(f"{out} ({out.stat().st_size // 1024} KB)")
     if a.cmd == "review":
         if a.score: print(review.score(Path(a.work) / f"review-{a.tag}")); return
         out = Path(a.work) / f"review-{a.tag}"

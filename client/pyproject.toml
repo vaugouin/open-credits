@@ -1,6 +1,6 @@
 [project]
 name = "opencredits"
-version = "0.6.0"
+version = "0.6.1"
 description = "open-credits client prototype: read the rolling end credits of a video file with OCR"
 readme = "README.md"
 license = "MIT"

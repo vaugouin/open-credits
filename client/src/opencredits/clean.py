@@ -26,6 +26,23 @@ def capital_i(text: str, name_column: bool) -> str:
     return " ".join(words)
 
 
+INNER_CAPITAL = re.compile(r"^[A-Z][a-z]+[A-Z][a-z]{2,}$")    # McDonald, DeVito, MacArthur: kept as read (not DavId)
+
+
+def small_caps(text: str) -> str:
+    """A Latin word whose case is mixed with no pattern gets its letters after the first in lower case.
+
+    In small capitals a lower-case letter is a smaller copy of the capital, and PP-OCRv5 answers the capital
+    for some of them: "Tomohiko IshII" is "Tomohiko Ishii", "DONgURI" is "Donguri". Words all in lower or
+    upper case, capitalised words, names with one inner capital and words that start in lower case (iPhone,
+    a logo) are left as read."""
+    def fix(m: re.Match) -> str:
+        w = m.group(0)
+        if w[0].islower() or w.isupper() or w[1:].islower() or INNER_CAPITAL.match(w): return w
+        return w[0] + w[1:].lower()
+    return re.sub(r"[A-Za-z]{2,}", fix, text)
+
+
 @lru_cache(maxsize=1)
 def _opencc():
     import opencc
@@ -82,6 +99,6 @@ def clean(lines: list[dict], name_x0: int, lang: str = "en") -> list[dict]:
         text = l["text"]
         if lang == "ja": text = katakana_twins(japanese_forms(text))
         if lang == "fa": text = persian_forms(text)
-        text = capital_i(opening_quote(text), l["x0"] > name_x0)
+        text = capital_i(small_caps(opening_quote(text)), l["x0"] > name_x0)
         if text != l["text"]: l["raw"], l["text"] = l["text"], text
     return lines

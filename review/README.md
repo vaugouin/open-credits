@@ -21,7 +21,8 @@ The app accepts only `sample.json`, `verdicts.json` and `crops/NN.png` in the zi
 1. Table: `cd ~/docker/open-credits && git pull && ~/docker/tools/runsqlvaugouindb.sh ~/docker/open-credits/doc/sql/OC-review-table.sql`
 2. Folders and secrets: `mkdir -p ~/docker/shared_data/oc-review` (owned by `debian`, uid 1000, which the container runs as), then `cp review/.env.example review/.env` and fill `DB_USER` and `DB_PASSWORD` (an account that can SELECT, INSERT, UPDATE and DELETE `T_WC_OC_REVIEW`).
 3. Start: `cd ~/docker/open-credits/review && docker compose up -d --build`
-4. Proxy: `git -C ~/docker/reverseproxy pull && docker exec reverseproxy nginx -t && docker exec reverseproxy nginx -s reload`
+4. Firewall: the proxy reaches the app from a Docker bridge, which ufw drops until it is allowed (the page stays blank, the app logs nothing): `sudo ufw allow from 172.16.0.0/12 to any port 8196 proto tcp comment 'open-credits review, docker bridges'` and the same from `192.168.128.0/20` (done 2026-10-18).
+5. Proxy: `git -C ~/docker/reverseproxy pull && docker exec reverseproxy nginx -t && docker exec reverseproxy nginx -s reload`
 
 ## Update
 

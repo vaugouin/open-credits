@@ -5,7 +5,7 @@ Python package `opencredits` (`src/opencredits/`), the contributor-side client. 
 ## Rules
 
 - Video files are **only read** (ffmpeg input). Frames, pages and results go to a work folder outside the repository; never commit them. The pilot's work folders live in `U:/open-credits/work/<title>-<tmdb id>/` (NAS; C: is nearly full, a film takes 350 to 400 MB).
-- Cleaning (`clean.py`) never loses the voted text: a changed line keeps it in `raw`. Japanese names may keep old kanji forms (亞, 齋): only characters that exist solely in simplified Chinese are converted.
+- Cleaning (`clean.py`) never loses the voted text: a changed line keeps it in `raw`. Japanese names may keep old kanji forms (亞, 齋): only characters outside the Japanese character set (Shift JIS) are converted. OpenCC alone maps Japanese characters too (岩 to 巌, 里 to 裏, 郁 to 鬱): the 0.6.1 review of the Japanese copy caught it.
 - `reference.py` is the only module that reads data from outside the open-credits tables (TMDb credits today). Keep it that way (repository rule on layer-4 comparisons).
 - Each stage writes one output file in the window folder (`<work>/w<from>-<to>/`) and is skipped when the file exists; keep stages restartable that way. Frames are shared in `<work>/frames/`. A second copy of a title gets its own work folder (`chihiro-129-disney`): its credits differ.
 - Keep the PaddlePaddle pin (`3.2.2`) until a newer release runs PP-OCRv5 on CPU with oneDNN: 3.3.1 raises `NotImplementedError` in `ConvertPirAttribute2RuntimeAttribute`.

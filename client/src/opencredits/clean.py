@@ -49,16 +49,27 @@ def _opencc():
     return opencc.OpenCC("s2t"), opencc.OpenCC("t2jp")
 
 
+def in_japanese(c: str) -> bool:
+    """The character exists in the Japanese character set (Shift JIS, Windows code page 932)."""
+    try:
+        c.encode("cp932"); return True
+    except UnicodeEncodeError:
+        return False
+
+
 def japanese_forms(text: str) -> str:
     """Japanese credits: a character that exists only in simplified Chinese becomes its Japanese form.
 
-    PP-OCRv5 is trained mostly on Chinese and sometimes answers 岛 for 島 or 凉 for 涼. A character that is
-    also Japanese (国) or an old form kept in a name (亞, 齋) is left as read."""
+    PP-OCRv5 is trained mostly on Chinese and sometimes answers 岛 for 島 or 边 for 辺. A character of the
+    Japanese character set is left as read, even when OpenCC would map it: 岩, 里, 郁, 征, 朴 and 怜 are
+    Japanese too (OpenCC turns them into 巌, 裏, 鬱, 徴, 樸, 憐), and so are old forms kept in a name (亞, 齋).
+    The cost: a simplified form that Shift JIS also holds (凉 for 涼) stays as read."""
     s2t, t2jp = _opencc()
     out = []
     for c in text:
-        t = s2t.convert(c)
-        out.append(t2jp.convert(t) if t != c and t2jp.convert(t) != c else c)
+        if in_japanese(c): out.append(c); continue
+        t = t2jp.convert(s2t.convert(c))
+        out.append(t if t != c else c)
     return "".join(out)
 
 

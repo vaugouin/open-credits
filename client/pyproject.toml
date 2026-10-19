@@ -1,6 +1,6 @@
 [project]
 name = "opencredits"
-version = "0.10.0"
+version = "0.10.1"
 description = "open-credits client prototype: read the credits of video files with OCR, from a queue fed by Plex, store them in SQLite, send submission bundles"
 readme = "README.md"
 license = "MIT"

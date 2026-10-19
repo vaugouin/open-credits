@@ -25,7 +25,7 @@ MAX_ATTEMPTS = 3
 POLL = 60            # s between looks at an empty queue
 WATCH = 600          # s between looks at Plex's new additions, even while the queue is busy
 BACKFILL = 20        # back-catalogue movies queued at a time, when the queue is empty
-INDEX_PAGE = 2000    # Plex movies per request when indexing the libraries (about 23 s a page)
+INDEX_PAGE = 2000    # Plex movies per request when indexing the libraries (about 4 s a page)
 NEW, BY_HAND, BACK = 0, 1, 2   # job priorities: new Plex additions first, the back catalogue last
 
 
@@ -72,7 +72,7 @@ def meta_set(db: sqlite3.Connection, key: str, value: str) -> None:
 
 
 def index_plex(db: sqlite3.Connection, log=print) -> int:
-    """Bring plex_movie up to date: every movie the first time (65,000: about 13 min), then the newest additions
+    """Bring plex_movie up to date: every movie the first time (65,000: about 2 min), then the newest additions
     down to the newest already known. Returns the movies read."""
     complete = meta_get(db, "plex_index_complete") == "1"
     known = db.execute("SELECT MAX(added_at) FROM plex_movie").fetchone()[0] or 0

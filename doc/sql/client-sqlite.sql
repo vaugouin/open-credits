@@ -303,7 +303,7 @@ CREATE TABLE IF NOT EXISTS job (
 CREATE INDEX IF NOT EXISTS job_queue ON job (status, priority, queued_at);
 CREATE INDEX IF NOT EXISTS job_path  ON job (local_path);
 
--- The movies of the contributor's Plex libraries with their TMDb id, read once (65,000 movies: about 13 min) and
+-- The movies of the contributor's Plex libraries with their TMDb id, read once (65,000 movies: about 2 min) and
 -- then from the newest additions: finds a collection's movies (Plex cannot search by TMDb id) and walks the back
 -- catalogue.
 CREATE TABLE IF NOT EXISTS plex_movie (

@@ -6,7 +6,7 @@ ENGINES = ("paddle", "tesseract")
 # PP-OCRv5 recognition model per credits language: the base model reads Chinese, Japanese and English,
 # the Arabic-script model reads Persian (PaddleOCR maps fa to it)
 PADDLE_REC = {"en": "en_PP-OCRv5_mobile_rec", "ja": "PP-OCRv5_mobile_rec", "zh": "PP-OCRv5_mobile_rec",
-              "fa": "arabic_PP-OCRv5_mobile_rec"}
+              "fa": "arabic_PP-OCRv5_mobile_rec", "latin": "latin_PP-OCRv5_mobile_rec"}   # latin: French, German, Spanish... with accents
 TESSERACT_LANG = {"en": "eng", "ja": "jpn", "zh": "chi_sim", "fa": "fas"}
 TESSERACT_EXE = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 THRESHOLD = 110    # Tesseract input: brighter than this becomes black ink on white

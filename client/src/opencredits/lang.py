@@ -4,7 +4,13 @@ The audio language is not enough: a dubbed copy keeps its original credits (Le V
 first, Japanese credits) and the Disney copy of Spirited Away has English credits over Japanese audio. So a few
 frames with the most text are read with the base model, which reads Japanese, Chinese and English, and the script
 of what it reads decides. The base model cannot read Arabic script: when it reads nothing convincing, the
-Arabic-script model gets the same frames. The audio hint decides only when the frames do not."""
+Arabic-script model gets the same frames. The audio hint decides only when the frames do not.
+
+Latin script is read with the English model, which has no accents, unless the Latin model writes accents on the
+frames (accented): on Ce corps tant désiré it wrote 6 accented letters in 251 ("ingénieur", "décors"), on two
+American films 0 in 206 and 1 in 477. The frames decide, not the audio: a French-dubbed American copy keeps
+English credits."""
+import unicodedata
 from pathlib import Path
 
 from . import ocr
@@ -12,6 +18,7 @@ from .scroll import text_mask
 
 SAMPLE = 6          # frames read
 MIN_LETTERS = 40    # letters read below which the frames decide nothing
+ACCENTED = 0.01     # share of accented letters from which Latin credits get the Latin model
 
 
 def text_frames(frames: dict[int, Path], n: int = SAMPLE) -> list[int]:
@@ -63,3 +70,14 @@ def detect(frames: dict[int, Path], hint: str | None = None, log=print) -> tuple
     log(f"   Arabic-script model: {c2}, confidence {conf2:.2f}")
     if decide(c2, conf2) == "fa" and conf2 >= 0.8: return "fa", f"frames, Arabic script ({c2}, confidence {conf2:.2f})"
     return (hint or "en"), "frames undecided: " + ("audio hint" if hint else "default")
+
+
+def accented(frame_sets: list[dict[int, Path]], log=print) -> bool:
+    """Whether Latin credits need the Latin model: its reading of the frames with the most text in each window
+    has accented letters (at least 3, and ACCENTED of the letters)."""
+    rd = ocr.reader("paddle", "latin")
+    texts = [r["text"] for fr in frame_sets for t in text_frames(fr) for r in rd(fr[t])]
+    letters = sum(1 for s in texts for ch in s if ch.isalpha() and ord(ch) < 0x250)
+    acc = sum(1 for s in texts for ch in s if ch.isalpha() and ord(ch) < 0x250 and unicodedata.decomposition(ch))
+    log(f"   Latin model: {acc} accented letters in {letters}")
+    return acc >= 3 and acc >= ACCENTED * letters

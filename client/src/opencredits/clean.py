@@ -105,6 +105,24 @@ def persian_forms(text: str) -> str:
     return text
 
 
+SHORT_SEEN = 2   # frames at most for a short line to be dropped
+
+
+def short(text: str) -> bool:
+    """Fewer letters and digits than a line usually has, by script: 2 Japanese or Chinese characters (音楽),
+    3 in Arabic script, 4 in Latin script (a year alone, 1979, is not short)."""
+    cjk = sum(1 for c in text if 0x3040 <= ord(c) <= 0x30FF or 0x3400 <= ord(c) <= 0x9FFF)
+    if cjk: return cjk < 2
+    n = sum(1 for c in text if c.isalnum())
+    return n < (3 if any(0x0600 <= ord(c) <= 0x06FF or 0xFB50 <= ord(c) <= 0xFEFF for c in text) else 4)
+
+
+def kept(l: dict) -> bool:
+    """A short line seen on SHORT_SEEN frames or fewer is noise ("YPT", "T..", "P31" in the review of three queue
+    titles: seen once each); seen longer, it is a real credit ("Ash" in Alien, "AS" on The D.I. cast cards, 坊)."""
+    return not short(l["text"]) or len(l.get("frames") or []) > SHORT_SEEN
+
+
 def clean(lines: list[dict], name_x0: int, lang: str = "en") -> list[dict]:
     for l in lines:
         text = l["text"]
@@ -112,4 +130,4 @@ def clean(lines: list[dict], name_x0: int, lang: str = "en") -> list[dict]:
         if lang == "fa": text = persian_forms(text)
         text = capital_i(small_caps(opening_quote(text)), l["x0"] > name_x0)
         if text != l["text"]: l["raw"], l["text"] = l["text"], text
-    return lines
+    return [l for l in lines if kept(l)]

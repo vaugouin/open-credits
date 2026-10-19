@@ -95,6 +95,9 @@ def process(db: sqlite3.Connection, job: dict, keep: bool = False) -> dict:
         a, b = wins[-1]
         print(f"language: frames {a}..{b} s")
         code, how = lang.detect(frames.extract(video, a, b, work / "frames"), hint)
+        # French credits of the 1950s are at the start: the accents are looked for in every window
+        if code == "en" and lang.accented([frames.extract(video, a, b, work / "frames") for a, b in wins]):
+            code, how = "latin", how + ", accents"
         rep["lang_decided_by"] = how
     rep["lang"] = code; print(f"language: {code}")
     for a, b in wins:

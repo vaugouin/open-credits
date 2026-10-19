@@ -6,9 +6,9 @@ from pathlib import Path
 def extract(video: str, start: int, end: int, out: Path, fps: int = 1) -> dict[int, Path]:
     """Extract frames from start to end (seconds, inclusive) into out/tNNNNN.png. The video is only read."""
     out.mkdir(parents=True, exist_ok=True)
-    have = frames_in(out)
-    if have and min(have) <= start and max(have) >= end:
-        return {t: p for t, p in have.items() if start <= t <= end}
+    have = {t: p for t, p in frames_in(out).items() if start <= t <= end}
+    if len(have) >= (end - start) * fps:   # every frame there (frames outside the window say nothing about it)
+        return have
     subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-ss", str(start), "-i", video,
                     "-t", str(end - start + 1), "-an", "-vf", f"fps={fps}", "-start_number", str(start),
                     "-y", str(out / "t%05d.png")], check=True)

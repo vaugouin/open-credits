@@ -197,7 +197,7 @@ def queue_cmd(p, a) -> None:
     if a.cmd == "send": outbox.send_ready(db, a.job or None)
     if a.cmd == "retry":
         if a.job:
-            for i in a.job: db.execute("UPDATE job SET status = 'queued', attempts = 0 WHERE id LIKE ? AND status IN ('failed', 'skipped')", (i + "%",))
+            for i in a.job: db.execute("UPDATE job SET status = 'queued', attempts = 0 WHERE (id LIKE ? OR id LIKE ?) AND status IN ('failed', 'skipped')", (i + "%", "%" + i))
         else:
             db.execute("UPDATE job SET status = 'queued', attempts = 0 WHERE status = 'failed'")
         db.commit(); print(jobs.listing(db, "queued"))

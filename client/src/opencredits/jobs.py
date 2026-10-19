@@ -200,5 +200,5 @@ def listing(db: sqlite3.Connection, status: str | None = None, limit: int = 50) 
     for jid, st, qa, path, err, rep in rows:
         r = json.loads(rep) if rep else {}
         detail = err or (f"{r.get('lang')}, {r.get('lines')} lines, {r.get('seconds')} s" if r else "")
-        out.append(f"{jid[:8]}  {st:8} {qa[:16]}  {Path(path).name[:70]}  {detail}")
+        out.append(f"{jid[-8:]}  {st:8} {qa[:16]}  {Path(path).name[:70]}  {detail}")
     return "\n".join(out)

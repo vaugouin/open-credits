@@ -153,11 +153,11 @@ def write(db: sqlite3.Connection, video: str, work_dir: Path, tag: str, tmdb_mov
     fr = frames.frames_in(work_dir / "frames")
     for win in sorted(work_dir.glob("w*")):
         rf, lf = win / f"readings-{tag}.json", win / f"lines-{tag}.json"
-        if rf.exists() and lf.exists():
+        # a roll found but nothing read on it gives no segment (the format wants a segment's frames)
+        if rf.exists() and lf.exists() and (lines := json.loads(lf.read_text(encoding="utf-8"))):
             rows = [tuple(r) for r in json.loads((win / "scroll.json").read_text(encoding="utf-8"))]
             first, last = scroll.find_roll(rows); offs = scroll.offsets(rows, first, last)
             readings = json.loads(rf.read_text(encoding="utf-8"))["readings"]
-            lines = json.loads(lf.read_text(encoding="utf-8"))
             px = (max(offs.values()) - min(offs.values())) / max(1, last - first)
             kind = "closing_credits" if first * 1000 > info["duration_ms"] / 2 else "opening_titles"
             segment(cur, sub_id, part_id, kind, "rolling", first, last, readings, lines, fr, offs, px)

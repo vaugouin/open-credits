@@ -50,13 +50,16 @@ def add(db: sqlite3.Connection, path: str, again: bool = False, **fields) -> str
     return jid
 
 
-def add_plex(db: sqlite3.Connection, rating_key: int, again: bool = False, priority: int = BY_HAND) -> str | None:
-    """Queue the copy of a Plex movie that best_copy picks."""
+def add_plex(db: sqlite3.Connection, rating_key: int, again: bool = False, priority: int = BY_HAND,
+             file: str | None = None) -> str | None:
+    """Queue the copy of a Plex movie that best_copy picks; file, when the index already knows it, spares a
+    request to Plex, which can take 40 s or more the first time an item is read."""
+    if file: return add(db, file, again, plex_rating_key=rating_key, priority=priority)
     try:
-        it = plex.item(rating_key)
+        it = plex.item(rating_key, markers=False)   # the worker reads the markers when it takes the job
     except urllib.error.HTTPError:   # gone from Plex since it was indexed
         return None
-    except (urllib.error.URLError, TimeoutError) as e:   # Plex stuck on one item (The Unknown, 1927: no answer in 120 s)
+    except (urllib.error.URLError, TimeoutError) as e:
         print(f"   Plex item {rating_key} did not answer ({e}), not queued", flush=True)
         return None
     c = plex.best_copy(it["copies"])
@@ -85,10 +88,11 @@ def index_plex(db: sqlite3.Connection, log=print) -> int:
         while True:
             page = plex.catalogue(section, start, INDEX_PAGE if not complete else 200)
             if not page: break
-            db.executemany("""INSERT INTO plex_movie (rating_key, tmdb_movie_id, title, year, added_at)
-                              VALUES (:rating_key, :tmdb_movie_id, :title, :year, :added_at)
+            db.executemany("""INSERT INTO plex_movie (rating_key, tmdb_movie_id, title, year, added_at, file)
+                              VALUES (:rating_key, :tmdb_movie_id, :title, :year, :added_at, :file)
                               ON CONFLICT (rating_key) DO UPDATE SET tmdb_movie_id = excluded.tmdb_movie_id,
-                              title = excluded.title, year = excluded.year, added_at = excluded.added_at""", page)
+                              title = excluded.title, year = excluded.year, added_at = excluded.added_at,
+                              file = excluded.file""", page)
             db.commit(); n += len(page); start += len(page)
             if not complete: log(f"   Plex index: {start} movies of library {section}")
             if complete and page[-1]["added_at"] < known: break
@@ -102,17 +106,18 @@ def enqueue_collection(db: sqlite3.Connection, collection_id: int, again: bool =
     from . import outbox
     c = outbox.collection(collection_id)
     index_plex(db)
-    queued, there, missing = 0, 0, []
+    queued, there, split, missing = 0, 0, 0, []
     for m in c["movies"]:
-        keys = [r[0] for r in db.execute("SELECT rating_key FROM plex_movie WHERE tmdb_movie_id = ? ORDER BY added_at",
-                                         (m["tmdb_movie_id"],))]
-        if not keys: missing.append(m); continue
-        if add_plex(db, keys[0], again, BY_HAND): queued += 1
+        rows = db.execute("SELECT rating_key, file FROM plex_movie WHERE tmdb_movie_id = ? ORDER BY file IS NULL, added_at",
+                          (m["tmdb_movie_id"],)).fetchall()
+        if not rows: missing.append(m); continue
+        if not rows[0][1]: split += 1; continue
+        if add_plex(db, rows[0][0], again, BY_HAND, rows[0][1]): queued += 1
         else: there += 1
     out = config.data_dir() / f"collection-{collection_id}-missing.txt"
     out.write_text("".join(f"{m['tmdb_movie_id']}\t{m['title']}\t{m['year'] or ''}\n" for m in missing), encoding="utf-8")
-    return (f"{c['name']}: {len(c['movies'])} movies, {queued} queued, {there} already there or without a single-file copy, "
-            f"{len(missing)} not in Plex (-> {out})")
+    return (f"{c['name']}: {len(c['movies'])} movies, {queued} queued, {there} already queued or read, "
+            f"{split} only in copies split into several files, {len(missing)} not in Plex (-> {out})")
 
 
 def backfill(db: sqlite3.Connection, n: int = BACKFILL) -> int:
@@ -122,12 +127,12 @@ def backfill(db: sqlite3.Connection, n: int = BACKFILL) -> int:
     a, k = (int(x) for x in mark.split(":")) if mark else (1 << 62, 1 << 62)
     queued = 0
     while queued < n:
-        rows = db.execute("""SELECT rating_key, added_at FROM plex_movie WHERE tmdb_movie_id IS NOT NULL
+        rows = db.execute("""SELECT rating_key, added_at, file FROM plex_movie WHERE tmdb_movie_id IS NOT NULL
                              AND (added_at < ? OR (added_at = ? AND rating_key < ?))
                              ORDER BY added_at DESC, rating_key DESC LIMIT ?""", (a, a, k, n)).fetchall()
         if not rows: break
-        for key, added in rows:
-            queued += add_plex(db, key, False, BACK) is not None
+        for key, added, file in rows:
+            if file: queued += add_plex(db, key, False, BACK, file) is not None
             a, k = added, key
         meta_set(db, "backfill_mark", f"{a}:{k}")
     return queued

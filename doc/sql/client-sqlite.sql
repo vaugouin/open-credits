@@ -20,7 +20,7 @@
 -- on every connection. Booleans are 0/1, lists are JSON arrays, UUIDs are version 7 text.
 -- =============================================================================
 
-PRAGMA user_version = 3;  -- schema version of this file (2: the job queue; 3: queue priority, Plex index)
+PRAGMA user_version = 4;  -- schema version of this file (2: the job queue; 3: queue priority, Plex index; 4: indexed files)
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE meta (
@@ -276,7 +276,7 @@ CREATE TABLE role_alias (
 -- Local only: the job queue ------------------------------------------------------
 -- One job per video file to read, taken by priority then in the order queued (opencredits worker). Never
 -- exported, no master counterpart. IF NOT EXISTS: store.connect runs this section on a file created at schema
--- version 1, and adds what version 3 brought to a version 2 file.
+-- version 1, and adds what versions 3 and 4 brought to older files.
 
 CREATE TABLE IF NOT EXISTS job (
   id              TEXT PRIMARY KEY CHECK (length(id) = 36),
@@ -311,7 +311,8 @@ CREATE TABLE IF NOT EXISTS plex_movie (
   tmdb_movie_id   INTEGER,
   title           TEXT,
   year            INTEGER,
-  added_at        INTEGER NOT NULL   -- Unix seconds, Plex addedAt
+  added_at        INTEGER NOT NULL,  -- Unix seconds, Plex addedAt
+  file            TEXT               -- the copy best_copy picks, local path; null when every copy is split in parts
 ) STRICT;
 CREATE INDEX IF NOT EXISTS plex_movie_tmdb  ON plex_movie (tmdb_movie_id);
 CREATE INDEX IF NOT EXISTS plex_movie_added ON plex_movie (added_at);

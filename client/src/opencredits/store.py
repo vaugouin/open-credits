@@ -56,8 +56,10 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
     version = db.execute("PRAGMA user_version").fetchone()[0]
     if version == 2:    # version 3 adds the queue priority (the job section below then adds the Plex index)
         db.execute("ALTER TABLE job ADD COLUMN priority INTEGER NOT NULL DEFAULT 1"); db.execute("DROP INDEX job_queue")
-    if version < 3:
-        db.executescript(ddl().split("-- Local only: the job queue", 1)[1].split("\n", 1)[1] + "\nPRAGMA user_version = 3;")
+    if version == 3:    # version 4 adds the file of each indexed Plex movie: the index is read again in full
+        db.execute("ALTER TABLE plex_movie ADD COLUMN file TEXT"); db.execute("DELETE FROM meta WHERE key = 'plex_index_complete'")
+    if version < 4:
+        db.executescript(ddl().split("-- Local only: the job queue", 1)[1].split("\n", 1)[1] + "\nPRAGMA user_version = 4;")
     return db
 
 

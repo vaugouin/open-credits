@@ -49,11 +49,9 @@ def latin(s: str) -> bool:
     return all(ord(c) < 0x250 or not c.isalpha() for c in s)
 
 
-def item(rating_key: int) -> dict:
-    """One Plex movie with its files (one per copy; multi-part copies keep their parts in order)."""
-    d = get(f"/library/metadata/{rating_key}", timeout=30, includeMarkers=1)["Metadata"][0]
-    ids = {g["id"].split("://")[0]: g["id"].split("://")[1] for g in d.get("Guid", [])}
-    library_lang = libraries().get(str(d.get("librarySectionID")), {}).get("language") or ""
+def copies_of(d: dict) -> list[dict]:
+    """A movie's copies (Plex Media), each with its files (Part) in order; audio languages, default first, when
+    the item was read on its own (a library listing has no streams)."""
     copies = []
     for m in d.get("Media", []):
         parts = [dict(file=local(p["file"]), size=p.get("size"), duration_s=(p.get("duration") or 0) / 1000,
@@ -61,6 +59,22 @@ def item(rating_key: int) -> dict:
                                                                    key=lambda s: not s.get("default"))])
                  for p in m.get("Part", [])]
         copies.append(dict(height=m.get("height"), parts=parts))
+    return copies
+
+
+def item(rating_key: int, markers: bool = True) -> dict:
+    """One Plex movie with its files (one per copy; multi-part copies keep their parts in order).
+
+    Plex can hang on the markers of some items (The Unknown, 1927: no answer in 120 s, instant without them):
+    without an answer in 30 s the item is read without markers."""
+    path = f"/library/metadata/{rating_key}"
+    try:
+        d = get(path, timeout=30, includeMarkers=1)["Metadata"][0] if markers else get(path)["Metadata"][0]
+    except TimeoutError:
+        d = get(path)["Metadata"][0]
+    ids = {g["id"].split("://")[0]: g["id"].split("://")[1] for g in d.get("Guid", [])}
+    library_lang = libraries().get(str(d.get("librarySectionID")), {}).get("language") or ""
+    copies = copies_of(d)
     title = d["title"]
     return dict(rating_key=int(d["ratingKey"]), title=title, year=d.get("year"), edition=d.get("editionTitle"),
                 # the library language says what language Plex titles are in, unless the title is in another script
@@ -103,14 +117,16 @@ def recent(n: int, since: int | None = None) -> list[dict]:
 
 
 def catalogue(section: str, start: int, size: int) -> list[dict]:
-    """One page of a library, newest additions first: rating key, TMDb id, title, year, addedAt."""
+    """One page of a library, newest additions first: rating key, TMDb id, title, year, addedAt, and the file
+    best_copy picks (None when every copy is split into several files)."""
     c = get(f"/library/sections/{section}/all", sort="addedAt:desc", includeGuids=1,
             **{"X-Plex-Container-Start": start, "X-Plex-Container-Size": size})
     out = []
     for m in c.get("Metadata", []):
         tmdb = [g["id"][7:] for g in m.get("Guid", []) if g["id"].startswith("tmdb://")]
+        best = best_copy(copies_of(m))
         out.append(dict(rating_key=int(m["ratingKey"]), tmdb_movie_id=int(tmdb[0]) if tmdb else None, title=m.get("title"),
-                        year=m.get("year"), added_at=int(m.get("addedAt", 0))))
+                        year=m.get("year"), added_at=int(m.get("addedAt", 0)), file=best["parts"][0]["file"] if best else None))
     return out
 
 

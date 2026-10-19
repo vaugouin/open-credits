@@ -1,5 +1,5 @@
 """Command line: opencredits run VIDEO --from S --to S --work DIR [--lang] [--tmdb-credits FILE --tmdb-movie ID],
-and the queue: enqueue, jobs, worker, send, retry.
+and the queue: enqueue, jobs, worker, send, retry, pause, resume.
 
 A run reads one time window: the rolling credits if the window holds a roll, and the cards (credits that stand
 still) in the rest of it. Frames are shared in WORK/frames; each window writes to WORK/w<from>-<to>/. Each stage
@@ -151,6 +151,8 @@ def main() -> None:
     s_.add_argument("job", nargs="*", help="job ids or id prefixes (default: every ready job)")
     t = sub.add_parser("retry", help="queue failed or skipped jobs again")
     t.add_argument("job", nargs="*", help="job ids or id prefixes (default: every failed job)")
+    sub.add_parser("pause", help="hold the worker: the job under way finishes, then nothing is read or sent until resume")
+    sub.add_parser("resume", help="let the worker go on")
     for x in (e, q, k, s_, t): x.add_argument("--db", help="SQLite file (default: opencredits.sqlite in the client's local folder)")
     a = p.parse_args()
     if a.cmd in ("run", "review") and a.tmdb_credits and not a.tmdb_movie: p.error("--tmdb-credits needs --tmdb-movie")
@@ -166,6 +168,10 @@ def main() -> None:
         print(f"{path}: submission {sid}, {n[0]} segments, {n[1]} frames, {n[2]} lines")
         print(f"{out} ({out.stat().st_size // 1024} KB)")
     if a.cmd in ("enqueue", "jobs", "worker", "send", "retry"): queue_cmd(p, a)
+    if a.cmd == "pause":
+        jobs.pause_flag().touch(); print("paused: the job under way finishes, then the worker waits (opencredits resume)")
+    if a.cmd == "resume":
+        jobs.pause_flag().unlink(missing_ok=True); print("resumed: the worker goes on within a minute")
     if a.cmd == "review":
         if a.score: print(review.score(Path(a.work) / f"review-{a.tag}")); return
         out = Path(a.work) / f"review-{a.tag}"

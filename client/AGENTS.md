@@ -29,6 +29,7 @@ uv run opencredits enqueue FILE... | --plex KEY... | --plex-recent N [--tmdb-mov
 uv run opencredits jobs [--status S]
 uv run opencredits enqueue --collection ID...                                                          # a T2S collection's movies in Plex
 uv run opencredits worker [--once] [--send] [--watch-plex] [--back-catalogue] [--keep-work]
+uv run opencredits pause | resume                                                                       # hold the worker after the job under way (a file "paused" in the local folder)
 powershell -ExecutionPolicy Bypass -File install-task.ps1 [-Remove]                                    # the worker as a scheduled task
 uv run opencredits send [JOB...]; uv run opencredits retry [JOB...]
 ```

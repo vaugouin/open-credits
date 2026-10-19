@@ -29,6 +29,11 @@ INDEX_PAGE = 2000    # Plex movies per request when indexing the libraries (abou
 NEW, BY_HAND, BACK = 0, 1, 2   # job priorities: new Plex additions first, the back catalogue last
 
 
+def pause_flag() -> Path:
+    """While this file exists the worker takes no new job and sends nothing; the job under way finishes."""
+    return config.data_dir() / "paused"
+
+
 def now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -264,8 +269,12 @@ def worker(db: sqlite3.Connection, once: bool = False, send: bool = False, watch
         sys.stdout = Tee(sys.stdout, log)
     recover(db)
     print(f"worker started {now()}: {db.execute('SELECT COUNT(*) FROM job WHERE status = ?', ('queued',)).fetchone()[0]} jobs queued", flush=True)
-    watched = 0.0
+    watched, held = 0.0, False
     while True:
+        if pause_flag().exists():
+            if not held: print(f"{now()}: paused (opencredits resume to go on)", flush=True); held = True
+            time.sleep(POLL); continue
+        if held: print(f"{now()}: resumed", flush=True); held = False
         if send: outbox.send_ready(db)
         if watch and plex.enabled() and time.time() - watched >= WATCH:   # new additions jump the queue
             watched = time.time()
@@ -301,7 +310,8 @@ def listing(db: sqlite3.Connection, status: str | None = None, limit: int = 50) 
         " ORDER BY CASE status WHEN 'running' THEN 0 WHEN 'queued' THEN 1 ELSE 2 END, queued_at DESC LIMIT ?"
     rows = db.execute(q, ((status,) if status else ()) + (limit,)).fetchall()
     counts = dict(db.execute("SELECT status, COUNT(*) FROM job GROUP BY status").fetchall())
-    out = [" · ".join(f"{k} {v}" for k, v in sorted(counts.items())) or "queue empty"]
+    out = [(" · ".join(f"{k} {v}" for k, v in sorted(counts.items())) or "queue empty") +
+           (" · PAUSED (opencredits resume)" if pause_flag().exists() else "")]
     for jid, st, qa, path, err, rep in rows:
         r = json.loads(rep) if rep else {}
         detail = err or (f"{r.get('lang')}, {r.get('lines')} lines, {r.get('seconds')} s" if r else "")

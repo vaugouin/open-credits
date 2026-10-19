@@ -107,6 +107,8 @@ To run the worker all the time, `install-task.ps1` installs a scheduled task: at
 powershell -ExecutionPolicy Bypass -File C:\Users\vaugo\Code\open-credits\client\install-task.ps1
 ```
 
+To check its work, `uv run opencredits pause` holds the worker: the job under way finishes and its bundle waits in the outbox, unsent, then nothing more is read or sent until `uv run opencredits resume`. `jobs` shows PAUSED while it lasts, and the pause survives a restart of the task or of the PC.
+
 ## Precision check of the new lines
 
 Once a title's windows are read, `review` draws 50 lines at random (fixed seed) among those that hold no TMDb name of the title, and writes `<work>/review-<engine>-<lang>/index.html` with a crop of a frame for each. Open the page in a browser, judge each line (exact, minor, wrong, noise), click *Save verdicts* and put the downloaded `verdicts.json` in that folder; `--score` then gives the precision (charter, decision 27 c). With `--upload`, the sample goes to the online review page instead ([`../review/`](../review/README.md)), where each verdict is saved as it is clicked.

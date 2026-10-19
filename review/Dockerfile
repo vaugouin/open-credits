@@ -4,7 +4,7 @@ FROM python:3.12-slim
 WORKDIR /app
 COPY review/requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
-COPY review/VERSION review/app.py /app/
+COPY review/VERSION review/app.py review/importer.py /app/
 COPY review/static /app/static
 COPY schema/check_submission.py schema/submission.schema.json /app/schema/
 USER nobody

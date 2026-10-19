@@ -25,7 +25,7 @@ Read the charter before changing anything structural. Key decisions an agent mus
 
 ## Pilot arrangement
 
-The client works in a local SQLite file and exports one JSON bundle per submission; an importer loads the bundles into the `T_WC_OC_*` tables (see `doc/technology-choices.md`, sections 4 and 6). `sqlite-plex-to-tmdb` (sibling repository) maps Plex files to TMDb IDs. Plex data in MariaDB: `T_WC_TMDB_PLEX_*`. Keep the `T_WC_OC_*` tables free of foreign keys to other `T_WC_*` tables, and the code that reads non-OC tables (layer 4 comparisons, ROLE seeding) in one module.
+The client works in a local SQLite file and exports one JSON bundle per submission; an importer (`review/importer.py`, service `oc-importer`) loads the bundles into the `T_WC_OC_*` tables, and `tmdb-front` shows them on the movie page in private mode (see `doc/technology-choices.md`, sections 4 and 6). `sqlite-plex-to-tmdb` (sibling repository) maps Plex files to TMDb IDs. Plex data in MariaDB: `T_WC_TMDB_PLEX_*`. Keep the `T_WC_OC_*` tables free of foreign keys to other `T_WC_*` tables, and the code that reads non-OC tables (layer 4 comparisons, ROLE seeding) in one module.
 
 ## Client prototype
 

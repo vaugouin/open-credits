@@ -1,4 +1,5 @@
-# open-credits review: hand-check of sampled OCR lines, behind www.vaugouin.com/oc-review/ (basic auth at the proxy).
+# open-credits review: hand-check of sampled OCR lines, behind www.vaugouin.com/oc-review/ (basic auth at the proxy),
+# and the importer, which loads the submission bundles the app receives into T_WC_OC_* (same image, own account).
 # Host network, as every stack that reaches MariaDB (published on 127.0.0.1:3306 only); listens on the Docker
 # bridge address, which the reverseproxy container reaches.
 services:
@@ -16,6 +17,34 @@ services:
       REVIEW_HOST: 172.17.0.1
       REVIEW_PORT: "8196"
       REVIEW_SHARED: /shared
+    volumes:
+      - /home/debian/docker/shared_data/oc-review:/shared
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  oc-importer:
+    image: oc-review:local         # built by oc-review above
+    container_name: oc-importer
+    restart: unless-stopped
+    depends_on:
+      - oc-review
+    network_mode: host
+    user: "1000:1000"     # moves the bundles from incoming/ to imported/ or rejected/
+    env_file: .env
+    environment:
+      REVIEW_SHARED: /shared
+      TZ: Europe/Paris    # DAT_CREAT and TIM_UPDATED in Paris time, like the rest of the database
+    command: ["python", "importer.py"]
     volumes:
       - /home/debian/docker/shared_data/oc-review:/shared
     read_only: true

@@ -6,7 +6,8 @@ new samples are loaded into T_WC_OC_REVIEW, and a verdicts.json from the offline
 
 Submission bundles (`opencredits send`) arrive at POST api/submissions: checked against the format
 (schema/check_submission.py, copied into the image), then kept in SHARED/incoming/ for the importer
-(technology-choices, section 4: the API only stores, one import process loads)."""
+(importer.py, the oc-importer service; technology-choices, section 4: the API only stores, one import process
+loads), which moves each one to imported/ or rejected/."""
 import hashlib
 import io
 import json
@@ -35,7 +36,7 @@ CROP = re.compile(r"^\d{2,3}\.png$")
 MEMBER = re.compile(r"^(sample\.json|verdicts\.json|crops/\d{2,3}\.png)$")   # the only files a sample zip may hold
 MAX_ZIP = 30 * 1024 * 1024
 MAX_FILES = 300
-INCOMING = SHARED / "incoming"
+INCOMING, IMPORTED, REJECTED = SHARED / "incoming", SHARED / "imported", SHARED / "rejected"
 BUNDLE_MEMBER = re.compile(r"^(submission\.json|frames/[0-9a-f-]{36}\.webp)$")   # what a submission zip may hold
 SUB_ID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
 
@@ -184,10 +185,11 @@ async def submission(request: Request):
     if not SUB_ID.match(sid): raise HTTPException(422, "submission id: a UUID version 7")
     INCOMING.mkdir(exist_ok=True)
     target = INCOMING / f"submission-{sid}.zip"
-    if target.exists():
-        if hashlib.sha256(target.read_bytes()).digest() == hashlib.sha256(body).digest():
-            return dict(ok=True, already=True, id=sid, work=describe_work(doc["work"]))
-        raise HTTPException(409, "another bundle with this submission id is already there")
+    for kept in (target, IMPORTED / target.name):     # a rejected bundle may be sent again, corrected
+        if kept.exists():
+            if hashlib.sha256(kept.read_bytes()).digest() == hashlib.sha256(body).digest():
+                return dict(ok=True, already=True, id=sid, work=describe_work(doc["work"]))
+            raise HTTPException(409, "another bundle with this submission id is already there")
     tmp = INCOMING / f".{sid}.part"
     tmp.write_bytes(body); tmp.rename(target)
     return dict(ok=True, already=False, id=sid, work=describe_work(doc["work"]),
@@ -195,11 +197,20 @@ async def submission(request: Request):
 
 
 @app.get("/api/submissions")
-def submissions():
-    """The bundles waiting for the importer: id, size, arrival time."""
-    files = sorted(INCOMING.glob("submission-*.zip"), key=lambda f: f.stat().st_mtime, reverse=True) if INCOMING.exists() else []
-    return [dict(id=f.stem[len("submission-"):], kb=f.stat().st_size // 1024,
-                 received=datetime.fromtimestamp(f.stat().st_mtime).isoformat(timespec="seconds")) for f in files]
+def submissions(limit: int = 100):
+    """The bundles received, newest first: id, size, arrival time, and where the importer has got with each
+    (waiting, imported, or rejected with its reason); counts of the three first."""
+    files = [(state, f) for state, d in (("waiting", INCOMING), ("imported", IMPORTED), ("rejected", REJECTED))
+             if d.exists() for f in d.glob("submission-*.zip")]
+    counts = {state: sum(1 for s_, _ in files if s_ == state) for state in ("waiting", "imported", "rejected")}
+    files.sort(key=lambda x: x[1].stat().st_mtime, reverse=True)
+    out = []
+    for state, f in files[:limit]:
+        why = f.with_suffix(".txt")
+        out.append(dict(id=f.stem[len("submission-"):], state=state, kb=f.stat().st_size // 1024,
+                        received=datetime.fromtimestamp(f.stat().st_mtime).isoformat(timespec="seconds"),
+                        **({"reason": why.read_text(encoding="utf-8").strip()} if state == "rejected" and why.exists() else {})))
+    return dict(counts=counts, submissions=out)
 
 
 @app.get("/api/collections/{collection_id}")

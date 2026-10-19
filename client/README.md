@@ -86,7 +86,7 @@ What a job finds on its own:
 
 Measured on *Alien* (theatrical, 1080p, from the NAS): Plex gave the ids and the credits marker, the frames gave English, and the job read the first 240 s (16 cards, 174 frames with text, 354 s) and 6749 to 6997 s (the roll and one card, 337 s): 255 lines against 254 for the hand-set windows, 751 s in all, a 65 KB bundle.
 
-Each job works in `%LOCALAPPDATA%/opencredits/work/<job id>/` (deleted once the bundle is built; `--keep-work` keeps it), and its bundle goes to `%LOCALAPPDATA%/opencredits/outbox/`. A job left running by a crash returns to the queue when the worker starts, and fails after 3 starts. The worker appends what it prints to `%LOCALAPPDATA%/opencredits/worker.log`. Sending posts each bundle to the server's `api/submissions` ([`../review/`](../review/README.md)), which checks it against the format and keeps it for the importer; a job sent is marked `sent`, its submission `exported`.
+Each job works in `%LOCALAPPDATA%/opencredits/work/<job id>/` (deleted once the bundle is built; `--keep-work` keeps it), and its bundle goes to `%LOCALAPPDATA%/opencredits/outbox/`. A job left running by a crash returns to the queue when the worker starts, and fails after 3 starts. The worker appends what it prints to `%LOCALAPPDATA%/opencredits/worker.log`. Sending posts each bundle to the server's `api/submissions` ([`../review/`](../review/README.md)), which checks it against the format and keeps it for the importer (it loads it into `T_WC_OC_*`, and the movie page of the site shows the lines in private mode); a job sent is marked `sent`, its submission `exported`.
 
 Settings live in `%LOCALAPPDATA%/opencredits/opencredits.env` (`KEY=VALUE` lines, overridden by the environment; never in git):
 

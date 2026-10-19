@@ -27,7 +27,9 @@ uv run opencredits submit VIDEO --work DIR --tag ENGINE-LANG --tmdb-movie ID --t
 uv run ../schema/check_submission.py DIR/submission-<id>.zip                                          # the format checker
 uv run opencredits enqueue FILE... | --plex KEY... | --plex-recent N [--tmdb-movie ID --title T --lang L --window FROM TO]
 uv run opencredits jobs [--status S]
-uv run opencredits worker [--once] [--send] [--watch-plex] [--keep-work]
+uv run opencredits enqueue --collection ID...                                                          # a T2S collection's movies in Plex
+uv run opencredits worker [--once] [--send] [--watch-plex] [--back-catalogue] [--keep-work]
+powershell -ExecutionPolicy Bypass -File install-task.ps1 [-Remove]                                    # the worker as a scheduled task
 uv run opencredits send [JOB...]; uv run opencredits retry [JOB...]
 ```
 

@@ -11,6 +11,7 @@ import sqlite3
 import sys
 import time
 import traceback
+import urllib.error
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -22,6 +23,10 @@ CLOSING = 600        # s read at the end when Plex has no credits marker
 LEAD = 60            # s read before a Plex credits marker: markers may start late, the scroll finds the real start
 MAX_ATTEMPTS = 3
 POLL = 60            # s between looks at an empty queue
+WATCH = 600          # s between looks at Plex's new additions, even while the queue is busy
+BACKFILL = 20        # back-catalogue movies queued at a time, when the queue is empty
+INDEX_PAGE = 2000    # Plex movies per request when indexing the libraries (about 23 s a page)
+NEW, BY_HAND, BACK = 0, 1, 2   # job priorities: new Plex additions first, the back catalogue last
 
 
 def now() -> str:
@@ -45,11 +50,84 @@ def add(db: sqlite3.Connection, path: str, again: bool = False, **fields) -> str
     return jid
 
 
-def add_plex(db: sqlite3.Connection, rating_key: int, again: bool = False) -> str | None:
+def add_plex(db: sqlite3.Connection, rating_key: int, again: bool = False, priority: int = BY_HAND) -> str | None:
     """Queue the copy of a Plex movie that best_copy picks."""
-    it = plex.item(rating_key); c = plex.best_copy(it["copies"])
+    try:
+        it = plex.item(rating_key)
+    except urllib.error.HTTPError:   # gone from Plex since it was indexed
+        return None
+    c = plex.best_copy(it["copies"])
     if c is None: return None
-    return add(db, c["parts"][0]["file"], again, plex_rating_key=rating_key)
+    return add(db, c["parts"][0]["file"], again, plex_rating_key=rating_key, priority=priority)
+
+
+def meta_get(db: sqlite3.Connection, key: str) -> str | None:
+    row = db.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+    return row[0] if row else None
+
+
+def meta_set(db: sqlite3.Connection, key: str, value: str) -> None:
+    db.execute("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value", (key, value))
+    db.commit()
+
+
+def index_plex(db: sqlite3.Connection, log=print) -> int:
+    """Bring plex_movie up to date: every movie the first time (65,000: about 13 min), then the newest additions
+    down to the newest already known. Returns the movies read."""
+    complete = meta_get(db, "plex_index_complete") == "1"
+    known = db.execute("SELECT MAX(added_at) FROM plex_movie").fetchone()[0] or 0
+    n = 0
+    for section in plex.sections():
+        start = 0
+        while True:
+            page = plex.catalogue(section, start, INDEX_PAGE if not complete else 200)
+            if not page: break
+            db.executemany("""INSERT INTO plex_movie (rating_key, tmdb_movie_id, title, year, added_at)
+                              VALUES (:rating_key, :tmdb_movie_id, :title, :year, :added_at)
+                              ON CONFLICT (rating_key) DO UPDATE SET tmdb_movie_id = excluded.tmdb_movie_id,
+                              title = excluded.title, year = excluded.year, added_at = excluded.added_at""", page)
+            db.commit(); n += len(page); start += len(page)
+            if not complete: log(f"   Plex index: {start} movies of library {section}")
+            if complete and page[-1]["added_at"] < known: break
+    meta_set(db, "plex_index_complete", "1")
+    return n
+
+
+def enqueue_collection(db: sqlite3.Connection, collection_id: int, again: bool = False) -> str:
+    """Queue the movies of a T2S collection that are in Plex. The ones missing are listed in
+    collection-<id>-missing.txt beside the database."""
+    from . import outbox
+    c = outbox.collection(collection_id)
+    index_plex(db)
+    queued, there, missing = 0, 0, []
+    for m in c["movies"]:
+        keys = [r[0] for r in db.execute("SELECT rating_key FROM plex_movie WHERE tmdb_movie_id = ? ORDER BY added_at",
+                                         (m["tmdb_movie_id"],))]
+        if not keys: missing.append(m); continue
+        if add_plex(db, keys[0], again, BY_HAND): queued += 1
+        else: there += 1
+    out = config.data_dir() / f"collection-{collection_id}-missing.txt"
+    out.write_text("".join(f"{m['tmdb_movie_id']}\t{m['title']}\t{m['year'] or ''}\n" for m in missing), encoding="utf-8")
+    return (f"{c['name']}: {len(c['movies'])} movies, {queued} queued, {there} already there or without a single-file copy, "
+            f"{len(missing)} not in Plex (-> {out})")
+
+
+def backfill(db: sqlite3.Connection, n: int = BACKFILL) -> int:
+    """Queue the next n movies of the back catalogue, from the newest addition down (mark: added_at:rating_key)."""
+    index_plex(db)
+    mark = meta_get(db, "backfill_mark")
+    a, k = (int(x) for x in mark.split(":")) if mark else (1 << 62, 1 << 62)
+    queued = 0
+    while queued < n:
+        rows = db.execute("""SELECT rating_key, added_at FROM plex_movie WHERE tmdb_movie_id IS NOT NULL
+                             AND (added_at < ? OR (added_at = ? AND rating_key < ?))
+                             ORDER BY added_at DESC, rating_key DESC LIMIT ?""", (a, a, k, n)).fetchall()
+        if not rows: break
+        for key, added in rows:
+            queued += add_plex(db, key, False, BACK) is not None
+            a, k = added, key
+        meta_set(db, "backfill_mark", f"{a}:{k}")
+    return queued
 
 
 def windows(duration: int, markers: list[dict]) -> list[list[int]]:
@@ -122,7 +200,7 @@ def process(db: sqlite3.Connection, job: dict, keep: bool = False) -> dict:
 
 def next_job(db: sqlite3.Connection) -> dict | None:
     db.row_factory = sqlite3.Row
-    r = db.execute("SELECT * FROM job WHERE status = 'queued' ORDER BY queued_at, rowid LIMIT 1").fetchone()
+    r = db.execute("SELECT * FROM job WHERE status = 'queued' ORDER BY priority, queued_at, rowid LIMIT 1").fetchone()
     db.row_factory = None
     return dict(r) if r else None
 
@@ -162,31 +240,47 @@ def watch_plex(db: sqlite3.Connection) -> int:
     n = 0
     if row:
         for m in reversed(new):    # oldest first, so the queue keeps Plex's order
-            n += add_plex(db, m["rating_key"]) is not None
+            n += add_plex(db, m["rating_key"], False, NEW) is not None
     db.execute("INSERT INTO meta (key, value) VALUES ('plex_added_mark', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
                (str(mark),)); db.commit()
     return n
 
 
-def worker(db: sqlite3.Connection, once: bool = False, send: bool = False, watch: bool = False, keep: bool = False) -> None:
+def worker(db: sqlite3.Connection, once: bool = False, send: bool = False, watch: bool = False, keep: bool = False,
+           back: bool = False) -> None:
     from . import outbox
     log = (config.data_dir() / "worker.log").open("a", encoding="utf-8")
-    sys.stdout = Tee(sys.stdout, log)
+    if sys.stdout is None:   # pythonw (the scheduled task): no console, everything goes to the log
+        sys.stdout = sys.stderr = Tee(log)
+    else:
+        sys.stdout = Tee(sys.stdout, log)
     recover(db)
     print(f"worker started {now()}: {db.execute('SELECT COUNT(*) FROM job WHERE status = ?', ('queued',)).fetchone()[0]} jobs queued", flush=True)
+    watched = 0.0
     while True:
         if send: outbox.send_ready(db)
+        if watch and plex.enabled() and time.time() - watched >= WATCH:   # new additions jump the queue
+            watched = time.time()
+            try:
+                n = watch_plex(db)
+                if n: print(f"{now()}: {n} new Plex movies queued", flush=True)
+            except (urllib.error.URLError, TimeoutError) as e:
+                print(f"{now()}: Plex unreachable ({e})", flush=True)
         job = next_job(db)
         if job: run_one(db, job, keep); continue
-        if watch and plex.enabled():
-            n = watch_plex(db)
-            if n: print(f"{now()}: {n} new Plex movies queued", flush=True); continue
+        if back and plex.enabled():
+            try:
+                n = backfill(db)
+                if n: print(f"{now()}: {n} back-catalogue movies queued", flush=True); continue
+            except (urllib.error.URLError, TimeoutError) as e:
+                print(f"{now()}: Plex unreachable ({e})", flush=True)
         if once: break
         time.sleep(POLL)
 
 
 class Tee:
     def __init__(self, *streams): self.streams = streams
+    def isatty(self): return False
     def write(self, s):
         for st in self.streams: st.write(s)
         self.streams[-1].flush()     # the log file, so it can be followed while the worker runs

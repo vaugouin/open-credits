@@ -202,6 +202,20 @@ def submissions():
                  received=datetime.fromtimestamp(f.stat().st_mtime).isoformat(timespec="seconds")) for f in files]
 
 
+@app.get("/api/collections/{collection_id}")
+def collection(collection_id: int):
+    """The movies of a T2S collection (the Criterion Collection is 5035), for the client's back catalogue
+    (opencredits enqueue --collection): TMDb id, title, year."""
+    with db() as c, c.cursor() as cur:
+        cur.execute("SELECT COLLECTION_NAME FROM T_WC_T2S_COLLECTION WHERE ID_T2S_COLLECTION = %s", (collection_id,))
+        row = cur.fetchone()
+        if not row: raise HTTPException(404, "no such collection")
+        cur.execute("""SELECT M.ID_MOVIE AS tmdb_movie_id, M.MOVIE_TITLE AS title, YEAR(M.DAT_RELEASE) AS year
+            FROM T_WC_T2S_MOVIE M JOIN T_WC_T2S_MOVIE_COLLECTION J ON M.ID_MOVIE = J.ID_MOVIE
+            WHERE J.ID_T2S_COLLECTION = %s ORDER BY M.DAT_RELEASE""", (collection_id,))
+        return dict(id=collection_id, name=row["COLLECTION_NAME"], movies=cur.fetchall())
+
+
 @app.get("/crops/{name}/{file}")
 def crop(name: str, file: str):
     if not CROP.match(file): raise HTTPException(404)

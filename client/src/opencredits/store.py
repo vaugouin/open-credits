@@ -52,9 +52,12 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
     new = not path.exists()
     db = sqlite3.connect(path, timeout=30)
     db.execute("PRAGMA foreign_keys = ON"); db.execute("PRAGMA journal_mode = WAL")   # the queue is read while the worker writes
-    if new: db.executescript(ddl())
-    elif db.execute("PRAGMA user_version").fetchone()[0] < 2:
-        db.executescript(ddl().split("-- Local only: the job queue", 1)[1].split("\n", 1)[1] + "\nPRAGMA user_version = 2;")
+    if new: db.executescript(ddl()); return db
+    version = db.execute("PRAGMA user_version").fetchone()[0]
+    if version == 2:    # version 3 adds the queue priority (the job section below then adds the Plex index)
+        db.execute("ALTER TABLE job ADD COLUMN priority INTEGER NOT NULL DEFAULT 1"); db.execute("DROP INDEX job_queue")
+    if version < 3:
+        db.executescript(ddl().split("-- Local only: the job queue", 1)[1].split("\n", 1)[1] + "\nPRAGMA user_version = 3;")
     return db
 
 
@@ -72,7 +75,7 @@ def opensubtitles_hash(path: str) -> tuple[str, int]:
 def probe(video: str) -> dict:
     r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
                         "stream=width,height,r_frame_rate:format=duration", "-of", "json", video],
-                       check=True, capture_output=True, text=True)
+                       check=True, capture_output=True, text=True, creationflags=frames.NO_WINDOW)
     d = json.loads(r.stdout); s = d["streams"][0]; num, den = s["r_frame_rate"].split("/")
     return dict(width=s["width"], height=s["height"], fps=round(int(num) / int(den), 3),
                 duration_ms=round(float(d["format"]["duration"]) * 1000))

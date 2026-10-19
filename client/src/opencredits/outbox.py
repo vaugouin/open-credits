@@ -13,13 +13,24 @@ from . import config
 from .jobs import now
 
 
-def post(path: Path) -> dict:
+def call(path: str, data: bytes | None = None) -> dict:
+    """GET (or POST data, a zip) one of the server's api/ paths, with the basic-auth login."""
     user, pwd = config.get("OC_REVIEW_USER"), config.get("OC_REVIEW_PASSWORD")
     if not user or not pwd: raise SystemExit("set OC_REVIEW_USER and OC_REVIEW_PASSWORD (the server's basic-auth login)")
-    url = config.get("OC_SERVER_URL", config.SERVER_URL).rstrip("/") + "/api/submissions"
-    req = urllib.request.Request(url, data=path.read_bytes(), method="POST", headers={
-        "Content-Type": "application/zip", "Authorization": "Basic " + base64.b64encode(f"{user}:{pwd}".encode()).decode()})
+    url = config.get("OC_SERVER_URL", config.SERVER_URL).rstrip("/") + "/api/" + path
+    headers = {"Authorization": "Basic " + base64.b64encode(f"{user}:{pwd}".encode()).decode()}
+    if data is not None: headers["Content-Type"] = "application/zip"
+    req = urllib.request.Request(url, data=data, method="POST" if data is not None else "GET", headers=headers)
     with urllib.request.urlopen(req, timeout=300) as r: return json.loads(r.read())
+
+
+def post(path: Path) -> dict:
+    return call("submissions", path.read_bytes())
+
+
+def collection(collection_id: int) -> dict:
+    """A T2S collection's movies (TMDb id, title, year), from the server's database."""
+    return call(f"collections/{collection_id}")
 
 
 def send(db: sqlite3.Connection, job_id: str) -> str:

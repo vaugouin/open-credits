@@ -132,6 +132,8 @@ def main() -> None:
     e.add_argument("video", nargs="*", help="video files or folders (their video files); Plex supplies the ids when it knows the file")
     e.add_argument("--plex", type=int, nargs="*", default=[], metavar="KEY", help="Plex rating keys")
     e.add_argument("--plex-recent", type=int, metavar="N", help="the N movies added to Plex most recently")
+    e.add_argument("--collection", type=int, nargs="*", default=[], metavar="ID",
+                   help="T2S collections (5035: the Criterion Collection): their movies that are in Plex")
     e.add_argument("--tmdb-movie", type=int); e.add_argument("--title"); e.add_argument("--title-language"); e.add_argument("--year", type=int)
     e.add_argument("--lang", choices=sorted(ocr.PADDLE_REC), help="credits language (default: decided on the frames)")
     e.add_argument("--window", nargs=2, type=int, action="append", metavar=("FROM", "TO"), help="time window in seconds (repeatable; default: Plex markers, else opening and end)")
@@ -139,11 +141,12 @@ def main() -> None:
     q = sub.add_parser("jobs", help="the queue: counts and the latest jobs")
     q.add_argument("--status", choices=("queued", "running", "ready", "sent", "failed", "skipped"))
     q.add_argument("--limit", type=int, default=50)
-    k = sub.add_parser("worker", help="read the queued jobs one after the other, oldest first; waits when the queue is empty")
+    k = sub.add_parser("worker", help="read the queued jobs one after the other: new Plex additions, then queued by hand, then the back catalogue")
     k.add_argument("--once", action="store_true", help="stop when the queue is empty")
     k.add_argument("--send", action="store_true", help="send each bundle once it is ready (otherwise: opencredits send)")
     k.add_argument("--watch-plex", action="store_true", help="queue the movies added to Plex while running")
     k.add_argument("--keep-work", action="store_true", help="keep each job's frames and stage files")
+    k.add_argument("--back-catalogue", action="store_true", help="when the queue is empty, queue the next Plex movies, newest additions first")
     s_ = sub.add_parser("send", help="send ready bundles to the server")
     s_.add_argument("job", nargs="*", help="job ids or id prefixes (default: every ready job)")
     t = sub.add_parser("retry", help="queue failed or skipped jobs again")
@@ -193,9 +196,11 @@ def queue_cmd(p, a) -> None:
                           year=a.year, lang=a.lang, windows=a.window) for f in files]
         keys = list(a.plex) + ([m["rating_key"] for m in reversed(plex.recent(a.plex_recent))] if a.plex_recent else [])
         added += [jobs.add_plex(db, key, a.again) for key in keys]
-        print(f"{sum(1 for x in added if x)} queued, {sum(1 for x in added if not x)} already there or without a single-file copy")
+        if files or keys:
+            print(f"{sum(1 for x in added if x)} queued, {sum(1 for x in added if not x)} already there or without a single-file copy")
+        for c in a.collection: print(jobs.enqueue_collection(db, c, a.again))
     if a.cmd == "jobs": print(jobs.listing(db, a.status, a.limit))
-    if a.cmd == "worker": jobs.worker(db, a.once, a.send, a.watch_plex, a.keep_work)
+    if a.cmd == "worker": jobs.worker(db, a.once, a.send, a.watch_plex, a.keep_work, a.back_catalogue)
     if a.cmd == "send": outbox.send_ready(db, a.job or None)
     if a.cmd == "retry":
         if a.job:

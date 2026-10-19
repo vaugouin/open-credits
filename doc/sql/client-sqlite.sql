@@ -20,7 +20,7 @@
 -- on every connection. Booleans are 0/1, lists are JSON arrays, UUIDs are version 7 text.
 -- =============================================================================
 
-PRAGMA user_version = 2;  -- schema version of this file (2: the job queue)
+PRAGMA user_version = 3;  -- schema version of this file (2: the job queue; 3: queue priority, Plex index)
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE meta (
@@ -274,8 +274,9 @@ CREATE TABLE role_alias (
 
 
 -- Local only: the job queue ------------------------------------------------------
--- One job per video file to read, taken in the order queued (opencredits worker). Never exported, no master
--- counterpart. IF NOT EXISTS: store.connect runs this section on a file created at schema version 1.
+-- One job per video file to read, taken by priority then in the order queued (opencredits worker). Never
+-- exported, no master counterpart. IF NOT EXISTS: store.connect runs this section on a file created at schema
+-- version 1, and adds what version 3 brought to a version 2 file.
 
 CREATE TABLE IF NOT EXISTS job (
   id              TEXT PRIMARY KEY CHECK (length(id) = 36),
@@ -287,6 +288,7 @@ CREATE TABLE IF NOT EXISTS job (
   year            INTEGER,
   lang            TEXT,            -- credits language (OCR model), given by hand; detected when null
   windows         TEXT CHECK (windows IS NULL OR json_valid(windows)),   -- [[from_s, to_s], ...] given by hand
+  priority        INTEGER NOT NULL DEFAULT 1,   -- 0 new Plex additions, 1 queued by hand or by collection, 2 back catalogue
   status          TEXT NOT NULL DEFAULT 'queued'
                   CHECK (status IN ('queued', 'running', 'ready', 'sent', 'failed', 'skipped')),
   queued_at       TEXT NOT NULL,   -- ISO 8601 UTC; the queue order
@@ -298,5 +300,18 @@ CREATE TABLE IF NOT EXISTS job (
   submission_id   TEXT REFERENCES submission (id) ON DELETE SET NULL,
   bundle_path     TEXT
 ) STRICT;
-CREATE INDEX IF NOT EXISTS job_queue ON job (status, queued_at);
+CREATE INDEX IF NOT EXISTS job_queue ON job (status, priority, queued_at);
 CREATE INDEX IF NOT EXISTS job_path  ON job (local_path);
+
+-- The movies of the contributor's Plex libraries with their TMDb id, read once (65,000 movies: about 13 min) and
+-- then from the newest additions: finds a collection's movies (Plex cannot search by TMDb id) and walks the back
+-- catalogue.
+CREATE TABLE IF NOT EXISTS plex_movie (
+  rating_key      INTEGER PRIMARY KEY,
+  tmdb_movie_id   INTEGER,
+  title           TEXT,
+  year            INTEGER,
+  added_at        INTEGER NOT NULL   -- Unix seconds, Plex addedAt
+) STRICT;
+CREATE INDEX IF NOT EXISTS plex_movie_tmdb  ON plex_movie (tmdb_movie_id);
+CREATE INDEX IF NOT EXISTS plex_movie_added ON plex_movie (added_at);

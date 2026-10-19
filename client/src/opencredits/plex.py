@@ -102,6 +102,18 @@ def recent(n: int, since: int | None = None) -> list[dict]:
     return sorted(out, key=lambda m: -m["added_at"])[:n]
 
 
+def catalogue(section: str, start: int, size: int) -> list[dict]:
+    """One page of a library, newest additions first: rating key, TMDb id, title, year, addedAt."""
+    c = get(f"/library/sections/{section}/all", sort="addedAt:desc", includeGuids=1,
+            **{"X-Plex-Container-Start": start, "X-Plex-Container-Size": size})
+    out = []
+    for m in c.get("Metadata", []):
+        tmdb = [g["id"][7:] for g in m.get("Guid", []) if g["id"].startswith("tmdb://")]
+        out.append(dict(rating_key=int(m["ratingKey"]), tmdb_movie_id=int(tmdb[0]) if tmdb else None, title=m.get("title"),
+                        year=m.get("year"), added_at=int(m.get("addedAt", 0))))
+    return out
+
+
 def best_copy(copies: list[dict]) -> dict | None:
     """The copy a job reads when a movie has several: single-file, 1080 lines if there is one (fast to decode,
     sharp enough for credits), else the tallest under 1080, else the smallest file."""

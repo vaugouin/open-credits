@@ -67,11 +67,13 @@ The commands above read one title by hand. The queue reads titles one after the 
 
 ```bash
 uv run opencredits enqueue --plex-recent 20             # the 20 movies added to Plex last
+uv run opencredits enqueue --collection 5035            # the movies of a T2S collection that are in Plex (5035: the Criterion Collection)
 uv run opencredits enqueue "T:/public/video/HDFilms/Alien 1979 {edition-Theatrical} REMASTERED PROPER 1080p BluRay x265.mp4"
 uv run opencredits enqueue FILE --tmdb-movie 348 --title Alien --year 1979 --lang en --window 0 170 --window 6800 6996   # without Plex
 uv run opencredits jobs                                 # counts and latest jobs
 uv run opencredits worker                               # runs until stopped; --once stops when the queue is empty
 uv run opencredits worker --send --watch-plex           # the continuous flow: new Plex movies queued, bundles sent once ready
+uv run opencredits worker --send --watch-plex --back-catalogue   # and, when the queue is empty, the rest of the library
 uv run opencredits send [JOB ...]                       # send ready bundles (all of them without ids)
 uv run opencredits retry [JOB ...]                      # queue failed jobs again
 ```
@@ -97,7 +99,13 @@ OC_REVIEW_USER=...                 # the server's basic-auth login, also used by
 OC_REVIEW_PASSWORD=...
 ```
 
-To run it at every logon, a Task Scheduler task can start `uv run --project C:/Users/vaugo/Code/open-credits/client opencredits worker --send --watch-plex`.
+The worker takes new Plex additions first (it looks every 10 minutes, even while busy), then what was queued by hand or by collection, then the back catalogue: 20 movies at a time from the newest addition down, queued only when nothing else waits. A collection's movie list comes from the server (`api/collections/<id>`, read from `T_WC_T2S_MOVIE_COLLECTION`); its movies are found in Plex through a local index of the libraries (`plex_movie`: every movie the first time, about 13 minutes for 65,000, then only the newest additions), since Plex cannot search by TMDb id. The ones not in Plex are listed in `%LOCALAPPDATA%/opencredits/collection-<id>-missing.txt`.
+
+To run the worker all the time, `install-task.ps1` installs a scheduled task: at logon, only while logged on (the mapped drives with the films exist only in the user's session), with no window (`pythonw`), at below-normal priority, restarted 5 minutes after a crash. Run it again after updating the client (it runs `uv sync` and restarts the task); `-Remove` removes it.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\Users\vaugo\Code\open-credits\client\install-task.ps1
+```
 
 ## Precision check of the new lines
 

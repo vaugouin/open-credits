@@ -20,6 +20,8 @@ The app accepts only `sample.json`, `verdicts.json` and `crops/NN.png` in the zi
 
 The same app receives the client's submission bundles (`opencredits send`, or `opencredits worker --send`) at `POST /oc-review/api/submissions`, behind the same basic auth. Each bundle is checked against the format (`schema/check_submission.py`); a valid one is kept as `~/docker/shared_data/oc-review/incoming/submission-<id>.zip` for the importer, an invalid one is refused with its first 20 errors. `GET /oc-review/api/submissions` lists the bundles waiting. Nothing is loaded into MariaDB yet.
 
+`GET /oc-review/api/collections/<id>` gives the movies of a T2S collection (TMDb id, title, year; 5035 is the Criterion Collection), for the client's `enqueue --collection`. The database account needs SELECT on `T_WC_T2S_COLLECTION`, `T_WC_T2S_MOVIE_COLLECTION` and `T_WC_T2S_MOVIE`.
+
 ## First deployment (VPS)
 
 1. Table: `cd ~/docker/open-credits && git pull && ~/docker/tools/runsqlvaugouindb.sh ~/docker/open-credits/doc/sql/OC-review-table.sql`

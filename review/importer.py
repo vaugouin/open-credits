@@ -47,7 +47,7 @@ class Refused(Exception):
 
 def db():
     return pymysql.connect(host=os.environ.get("DB_HOST", "127.0.0.1"), port=int(os.environ.get("DB_PORT", "3306")),
-                           user=os.environ["IMPORT_DB_USER"], password=os.environ["IMPORT_DB_PASSWORD"],
+                           user=os.environ.get("IMPORT_DB_USER", "oc_importer"), password=os.environ["IMPORT_DB_PASSWORD"],
                            database=os.environ.get("DB_NAME", "vaugouindb"), charset="utf8mb4",
                            cursorclass=pymysql.cursors.DictCursor, autocommit=False)
 

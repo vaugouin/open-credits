@@ -113,7 +113,7 @@ def main() -> None:
     v = sub.add_parser("review", help="sample the new lines of a work folder for a precision check, or score the verdicts")
     v.add_argument("--work", required=True, help="work folder of the title, after its runs")
     v.add_argument("--tag", default="paddle-en", help="engine-lang of the runs to sample")
-    v.add_argument("--tmdb-credits", help="result file of doc/sql/pilot-tmdb-credits.sql")
+    v.add_argument("--tmdb-credits", help="result file of doc/sql/pilot-tmdb-credits.sql; without it, every line is sampled")
     v.add_argument("--tmdb-movie", type=int)
     v.add_argument("--score", action="store_true", help="score WORK/review-TAG/verdicts.json")
     v.add_argument("--upload", action="store_true", help="send the sample to the online review page (OC_REVIEW_USER, OC_REVIEW_PASSWORD)")
@@ -166,10 +166,12 @@ def main() -> None:
     if a.cmd == "review":
         if a.score: print(review.score(Path(a.work) / f"review-{a.tag}")); return
         out = Path(a.work) / f"review-{a.tag}"
-        if a.tmdb_credits:
-            out = review.build(Path(a.work), a.tag, reference.load_tmdb(Path(a.tmdb_credits), a.tmdb_movie), a.tmdb_movie)
+        if a.tmdb_movie and not (a.upload and (out / "sample.json").exists()):
+            # without a TMDb credits file every line is sampled, not only the new ones (a noise check)
+            people = reference.load_tmdb(Path(a.tmdb_credits), a.tmdb_movie) if a.tmdb_credits else {}
+            out = review.build(Path(a.work), a.tag, people, a.tmdb_movie)
             print(f"{out / 'index.html'}")
-        elif not (a.upload and (out / "sample.json").exists()): p.error("review needs --tmdb-credits and --tmdb-movie")
+        elif not (a.upload and (out / "sample.json").exists()): p.error("review needs --tmdb-movie (and --tmdb-credits to sample only the new lines)")
         if a.upload:
             name = f"{Path(a.work).name}-{a.tag}"
             r = review.upload(out, name, a.url, a.replace)

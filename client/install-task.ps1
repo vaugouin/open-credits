@@ -22,8 +22,9 @@ if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
 }
 if ($Remove) { return }
 
-# the virtual environment the task runs, brought to the checked-out version
-uv sync --project $Client
+# the virtual environment the task runs, brought to the checked-out version with every OCR engine (a plain
+# uv sync would uninstall PaddleOCR, an optional extra)
+uv sync --project $Client --all-extras
 if (-not $?) { throw "uv sync failed" }
 $Pythonw = Join-Path $Client ".venv\Scripts\pythonw.exe"
 

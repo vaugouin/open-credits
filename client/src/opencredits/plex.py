@@ -22,11 +22,11 @@ def enabled() -> bool:
     return bool(config.get("PLEX_SERVER_URL") and config.get("PLEX_TOKEN"))
 
 
-def get(path: str, **query) -> dict:
+def get(path: str, timeout: int = 120, **query) -> dict:
     query["X-Plex-Token"] = config.get("PLEX_TOKEN")
     url = config.get("PLEX_SERVER_URL").rstrip("/") + path + ("&" if "?" in path else "?") + urllib.parse.urlencode(query)
     req = urllib.request.Request(url, headers={"Accept": "application/json"})
-    with urllib.request.urlopen(req, timeout=120) as r: return json.load(r)["MediaContainer"]
+    with urllib.request.urlopen(req, timeout=timeout) as r: return json.load(r)["MediaContainer"]
 
 
 @lru_cache(maxsize=1)
@@ -51,7 +51,7 @@ def latin(s: str) -> bool:
 
 def item(rating_key: int) -> dict:
     """One Plex movie with its files (one per copy; multi-part copies keep their parts in order)."""
-    d = get(f"/library/metadata/{rating_key}", includeMarkers=1)["Metadata"][0]
+    d = get(f"/library/metadata/{rating_key}", timeout=30, includeMarkers=1)["Metadata"][0]
     ids = {g["id"].split("://")[0]: g["id"].split("://")[1] for g in d.get("Guid", [])}
     library_lang = libraries().get(str(d.get("librarySectionID")), {}).get("language") or ""
     copies = []

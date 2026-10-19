@@ -56,6 +56,9 @@ def add_plex(db: sqlite3.Connection, rating_key: int, again: bool = False, prior
         it = plex.item(rating_key)
     except urllib.error.HTTPError:   # gone from Plex since it was indexed
         return None
+    except (urllib.error.URLError, TimeoutError) as e:   # Plex stuck on one item (The Unknown, 1927: no answer in 120 s)
+        print(f"   Plex item {rating_key} did not answer ({e}), not queued", flush=True)
+        return None
     c = plex.best_copy(it["copies"])
     if c is None: return None
     return add(db, c["parts"][0]["file"], again, plex_rating_key=rating_key, priority=priority)
